@@ -1,32 +1,61 @@
 import WalletConnect from '../components/WalletConnect';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function App() {
   const [scrollPosition, setScrollPosition] = useState(0);
-  const maxScroll = 500; // Adjust based on your room width
+  const [imageWidth, setImageWidth] = useState(0);
+  const [maxScroll, setMaxScroll] = useState(0);
+  
+  // Calculate max scroll based on image dimensions (9270 × 3700)
+  // Image aspect ratio: 9270/3700 = 2.5
+  useEffect(() => {
+    const calculateDimensions = () => {
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const imageAspectRatio = 9270 / 3700; // 2.5
+      const imageDisplayWidth = viewportHeight * imageAspectRatio;
+      const maxScrollValue = Math.max(0, imageDisplayWidth - viewportWidth);
+      
+      setImageWidth(imageDisplayWidth);
+      setMaxScroll(maxScrollValue);
+    };
+    
+    calculateDimensions();
+    window.addEventListener('resize', calculateDimensions);
+    return () => window.removeEventListener('resize', calculateDimensions);
+  }, []);
 
   const scrollLeft = () => {
-    setScrollPosition(prev => Math.max(0, prev - 100));
+    setScrollPosition(prev => {
+      const newPos = prev - 200;
+      console.log('Scrolling left, new position:', newPos);
+      return Math.max(0, newPos);
+    });
   };
 
   const scrollRight = () => {
-    setScrollPosition(prev => Math.min(maxScroll, prev + 100));
+    setScrollPosition(prev => {
+      const newPos = prev + 200;
+      console.log('Scrolling right, new position:', newPos);
+      return Math.min(maxScroll, newPos);
+    });
   };
 
   return (
     <div className="w-full bg-black relative overflow-hidden" style={{ height: '100vh' }}>
       {/* 2D Room Background - Match image height, horizontal scrollable */}
       <div 
-        className="w-full bg-no-repeat transition-transform duration-300 ease-out"
+        className="bg-no-repeat transition-transform duration-300 ease-out"
         style={{
           backgroundImage: 'url(/room.png)',
           backgroundSize: 'contain', // Show full image without cropping
-          backgroundPosition: `${scrollPosition}px 0%`, // Horizontal scroll
+          backgroundPosition: '0% 0%',
           backgroundRepeat: 'no-repeat',
           imageRendering: 'pixelated',
           height: '100vh', // Full viewport height
-          minWidth: '200%' // Make it wider for horizontal scrolling
+          width: `${imageWidth}px`, // Calculate width based on image aspect ratio
+          transform: `translateX(-${scrollPosition}px)`, // Use transform for scrolling
         }}
       />
       
@@ -41,37 +70,29 @@ export default function App() {
         <button
           onClick={scrollLeft}
           disabled={scrollPosition <= 0}
-          className="bg-green-500 hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold py-3 px-6 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
+          className="bg-green-500 hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold w-12 h-12 rounded-full border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50 flex items-center justify-center"
           style={{
             fontFamily: 'monospace',
             textShadow: '0 0 10px #00ff00'
           }}
         >
-          ← SCROLL LEFT
+          ←
         </button>
 
         {/* Right Scroll Button */}
         <button
           onClick={scrollRight}
           disabled={scrollPosition >= maxScroll}
-          className="bg-green-500 hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold py-3 px-6 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
+          className="bg-green-500 hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold w-12 h-12 rounded-full border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50 flex items-center justify-center"
           style={{
             fontFamily: 'monospace',
             textShadow: '0 0 10px #00ff00'
           }}
         >
-          SCROLL RIGHT →
+          →
         </button>
       </div>
 
-      {/* Scroll Indicator */}
-      <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 z-10">
-        <div className="bg-black/50 backdrop-blur-sm rounded-full px-4 py-2">
-          <div className="text-green-400 font-mono text-sm">
-            {Math.round((scrollPosition / maxScroll) * 100)}% • {scrollPosition}px
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

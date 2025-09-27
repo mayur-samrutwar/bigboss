@@ -1,91 +1,122 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import WalletConnect from '../components/WalletConnect';
+import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS } from '../abi/ShowContract';
 
 export default function Admin() {
   const router = useRouter();
+  const { address, isConnected } = useAccount();
+  const { writeContract, data: hash, error: writeError, isPending } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
+    hash,
+  });
+  
   const [showInfo, setShowInfo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [winnerAgentId, setWinnerAgentId] = useState('');
 
-  // Mock contract interaction - replace with actual contract calls
-  const getCurrentShow = async () => {
-    // This would be replaced with actual contract call
-    // const contract = new ethers.Contract(contractAddress, abi, provider);
-    // const show = await contract.getCurrentShow();
-    
-    // Mock data for now
-    return {
-      showId: 1,
-      startTime: Date.now() - 1000000, // 16 minutes ago
-      endTime: Date.now() + 1000000,   // 14 minutes from now
-      isActive: true,
-      entryFee: '0.01',
-      totalPrize: '0.05',
-      participantCount: 3
-    };
-  };
+  // Contract read functions
+  const { data: currentShowId } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'currentShowId',
+  });
+
+  const { data: showData } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'getShow',
+    args: currentShowId ? [currentShowId] : undefined,
+  });
+
+  const { data: contractOwner } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'owner',
+  });
+
+  const { data: isPaused } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'paused',
+  });
+
+  // Check if current user is admin
+  const isAdmin = address && contractOwner && address.toLowerCase() === contractOwner.toLowerCase();
 
   const startNewShow = async () => {
-    setLoading(true);
-    setError('');
-    
+    if (!isAdmin) {
+      setError('Only contract owner can start a new show');
+      return;
+    }
+
     try {
-      // This would be replaced with actual contract call
-      // const contract = new ethers.Contract(contractAddress, abi, signer);
-      // const tx = await contract.startShow();
-      // await tx.wait();
-      
-      // Mock success
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      alert('New show started successfully!');
-      
-      // Refresh show info
-      const show = await getCurrentShow();
-      setShowInfo(show);
+      writeContract({
+        address: SHOW_CONTRACT_ADDRESS,
+        abi: SHOW_CONTRACT_ABI,
+        functionName: 'startShow',
+      });
     } catch (err) {
       setError('Failed to start new show: ' + err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
   const endCurrentShow = async () => {
-    setLoading(true);
-    setError('');
-    
+    if (!isAdmin) {
+      setError('Only contract owner can end a show');
+      return;
+    }
+
+    if (!winnerAgentId) {
+      setError('Please enter a winner agent ID');
+      return;
+    }
+
     try {
-      // This would be replaced with actual contract call
-      // const contract = new ethers.Contract(contractAddress, abi, signer);
-      // const tx = await contract.endShow(winnerAgentId);
-      // await tx.wait();
-      
-      // Mock success
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      alert('Show ended successfully!');
-      
-      // Refresh show info
-      const show = await getCurrentShow();
-      setShowInfo(show);
+      writeContract({
+        address: SHOW_CONTRACT_ADDRESS,
+        abi: SHOW_CONTRACT_ABI,
+        functionName: 'endShow',
+        args: [BigInt(winnerAgentId)],
+      });
     } catch (err) {
       setError('Failed to end show: ' + err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
+  // Update show info when contract data changes
   useEffect(() => {
-    const loadShowInfo = async () => {
-      try {
-        const show = await getCurrentShow();
-        setShowInfo(show);
-      } catch (err) {
-        setError('Failed to load show info: ' + err.message);
-      }
-    };
-    
-    loadShowInfo();
-  }, []);
+    if (showData) {
+      const [showId, startTime, endTime, isActive, isEnded, entryFee, totalPrize, winnerAgentId, participatingAgents] = showData;
+      setShowInfo({
+        showId: Number(showId),
+        startTime: Number(startTime) * 1000, // Convert to milliseconds
+        endTime: Number(endTime) * 1000,
+        isActive,
+        isEnded,
+        entryFee: (Number(entryFee) / 1e18).toFixed(4), // Convert from wei to ETH
+        totalPrize: (Number(totalPrize) / 1e18).toFixed(4),
+        participantCount: participatingAgents.length
+      });
+    }
+  }, [showData]);
+
+  // Handle transaction success
+  useEffect(() => {
+    if (isConfirmed) {
+      setError('');
+      alert('Transaction confirmed successfully!');
+    }
+  }, [isConfirmed]);
+
+  // Handle write errors
+  useEffect(() => {
+    if (writeError) {
+      setError('Transaction failed: ' + writeError.message);
+    }
+  }, [writeError]);
 
   const formatTime = (timestamp) => {
     return new Date(timestamp).toLocaleString();
@@ -143,6 +174,21 @@ export default function Admin() {
             <div className="mb-8">
               <WalletConnect />
             </div>
+
+            {/* Admin Status */}
+            {isConnected && (
+              <div className="mb-6">
+                {isAdmin ? (
+                  <div className="bg-green-900/20 border border-green-500 text-green-400 font-mono p-4 rounded">
+                    ✓ ADMIN ACCESS GRANTED
+                  </div>
+                ) : (
+                  <div className="bg-red-900/20 border border-red-500 text-red-400 font-mono p-4 rounded">
+                    ✗ ADMIN ACCESS DENIED - Only contract owner can perform admin actions
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Error Message */}
             {error && (
@@ -206,32 +252,49 @@ export default function Admin() {
             <div className="space-y-4">
               <h2 className="text-green-400 font-mono text-2xl mb-6">ADMIN ACTIONS</h2>
               
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <div className="flex flex-col gap-6">
                 {/* Start New Show Button */}
                 <button
                   onClick={startNewShow}
-                  disabled={loading || (showInfo && showInfo.isActive)}
+                  disabled={!isAdmin || isPending || isConfirming || (showInfo && showInfo.isActive)}
                   className="bg-green-500 hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold py-4 px-8 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
                   style={{
                     fontFamily: 'monospace',
                     textShadow: '0 0 10px #00ff00'
                   }}
                 >
-                  {loading ? 'PROCESSING...' : 'START NEW SHOW'}
+                  {isPending ? 'SENDING...' : isConfirming ? 'CONFIRMING...' : 'START NEW SHOW'}
                 </button>
 
-                {/* End Current Show Button */}
-                <button
-                  onClick={endCurrentShow}
-                  disabled={loading || !showInfo || !showInfo.isActive}
-                  className="bg-red-500 hover:bg-red-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-8 rounded-lg border-2 border-red-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-red-500/50"
-                  style={{
-                    fontFamily: 'monospace',
-                    textShadow: '0 0 10px #ff0000'
-                  }}
-                >
-                  {loading ? 'PROCESSING...' : 'END CURRENT SHOW'}
-                </button>
+                {/* End Current Show Section */}
+                <div className="bg-gray-900/20 border border-gray-500 rounded-lg p-6">
+                  <h3 className="text-green-400 font-mono text-lg mb-4">END CURRENT SHOW</h3>
+                  
+                  <div className="mb-4">
+                    <label className="block text-green-300 font-mono text-sm mb-2">
+                      WINNER AGENT ID:
+                    </label>
+                    <input
+                      type="number"
+                      value={winnerAgentId}
+                      onChange={(e) => setWinnerAgentId(e.target.value)}
+                      placeholder="Enter winner agent ID"
+                      className="w-full bg-black border-2 border-green-500 text-green-400 font-mono px-3 py-2 rounded focus:border-green-400 focus:outline-none"
+                    />
+                  </div>
+                  
+                  <button
+                    onClick={endCurrentShow}
+                    disabled={!isAdmin || isPending || isConfirming || !showInfo || !showInfo.isActive || !winnerAgentId}
+                    className="bg-red-500 hover:bg-red-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg border-2 border-red-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-red-500/50"
+                    style={{
+                      fontFamily: 'monospace',
+                      textShadow: '0 0 10px #ff0000'
+                    }}
+                  >
+                    {isPending ? 'SENDING...' : isConfirming ? 'CONFIRMING...' : 'END CURRENT SHOW'}
+                  </button>
+                </div>
               </div>
             </div>
 

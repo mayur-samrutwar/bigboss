@@ -17,6 +17,8 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
  */
 contract ShowContract is ReentrancyGuard, Ownable, Pausable {
     
+    constructor() Ownable(msg.sender) {}
+    
     // Events
     event ShowStarted(uint256 indexed showId, uint256 startTime, uint256 endTime, uint256 entryFee);
     event ShowEnded(uint256 indexed showId, uint256 winnerAgentId, uint256 totalPrize);

@@ -29,16 +29,17 @@ async function getRealShowData(showId) {
     for (const agentId of agentIds) {
       const agentInfo = await contract.getAgentInfo(agentId);
       
-      if (!agentInfo.isAlive) continue; // Skip dead agents
+      if (!Boolean(agentInfo[5])) continue; // Skip dead agents (isAlive is at index 5)
       
+      const parameters = agentInfo[3]; // parameters is at index 3
       const traits = {
-        popularity: agentInfo.parameters[0] || 50,
-        aggression: agentInfo.parameters[1] || 30,
-        loyalty: agentInfo.parameters[2] || 60,
-        resilience: agentInfo.parameters[3] || 50,
-        charisma: agentInfo.parameters[4] || 40,
-        suspicion: agentInfo.parameters[5] || 20,
-        energy: agentInfo.parameters[6] || 80
+        popularity: Number(parameters[0]) || 50,
+        aggression: Number(parameters[1]) || 30,
+        loyalty: Number(parameters[2]) || 60,
+        resilience: Number(parameters[3]) || 50,
+        charisma: Number(parameters[4]) || 40,
+        suspicion: Number(parameters[5]) || 20,
+        energy: Number(parameters[6]) || 80
       };
       
       // Calculate risk score: (Suspicion + Aggression) - (Popularity + Charisma + Resilience)
@@ -46,8 +47,8 @@ async function getRealShowData(showId) {
       
       agentsData.push({
         agentId: agentId.toString(),
-        name: agentInfo.name,
-        isAlive: agentInfo.isAlive,
+        name: agentInfo[2], // name is at index 2
+        isAlive: Boolean(agentInfo[5]), // isAlive is at index 5
         traits: traits,
         riskScore: riskScore
       });

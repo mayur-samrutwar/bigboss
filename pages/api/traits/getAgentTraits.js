@@ -1,4 +1,14 @@
-// Simple mock API for testing without contract dependencies
+import { ethers } from 'ethers';
+
+// Contract configuration (avoiding import issues)
+const SHOW_CONTRACT_ADDRESS = '0x2f2ce6304a3CaF8e38BE991f0E375BBdd1015D1c';
+
+// Basic ABI for getAgentInfo function
+const BASIC_ABI = [
+  'function agentCounter() view returns (uint256)',
+  'function getAgentInfo(uint256) view returns (uint256, address, string, uint256[], bool, bool, uint256, uint256)'
+];
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -13,90 +23,100 @@ export default async function handler(req, res) {
     });
   }
 
-  // Mock data for testing
-  const mockAgents = {
-    "1": {
-      agentId: "1",
-      name: "Rajesh",
-      isActive: true,
-      isAlive: true,
-      traits: {
-        popularity: 75,
-        aggression: 40,
-        loyalty: 60,
-        resilience: 70,
-        charisma: 80,
-        suspicion: 20,
-        energy: 90
-      },
-      riskScore: -155, // (20 + 40) - (75 + 80 + 70) = -155
-      lastUpdated: Date.now().toString()
-    },
-    "2": {
-      agentId: "2", 
-      name: "Priya",
-      isActive: true,
-      isAlive: true,
-      traits: {
-        popularity: 60,
-        aggression: 70,
-        loyalty: 80,
-        resilience: 60,
-        charisma: 50,
-        suspicion: 30,
-        energy: 85
-      },
-      riskScore: -10, // (30 + 70) - (60 + 50 + 60) = -10
-      lastUpdated: Date.now().toString()
-    },
-    "3": {
-      agentId: "3",
-      name: "Vikram", 
-      isActive: true,
-      isAlive: true,
-      traits: {
-        popularity: 50,
-        aggression: 60,
-        loyalty: 50,
-        resilience: 80,
-        charisma: 60,
-        suspicion: 40,
-        energy: 75
-      },
-      riskScore: -30, // (40 + 60) - (50 + 60 + 80) = -30
-      lastUpdated: Date.now().toString()
-    }
-  };
-
   try {
-    console.log(`Getting traits for agent ${agentId}...`);
+    console.log(`Getting traits for agent ${agentId} from contract...`);
+    console.log('Contract address:', SHOW_CONTRACT_ADDRESS);
+    console.log('ABI length:', BASIC_ABI.length);
     
-    const agent = mockAgents[agentId];
+    // Set up provider
+    const provider = new ethers.JsonRpcProvider('https://testnet.evm.nodes.onflow.org');
+    const contract = new ethers.Contract(SHOW_CONTRACT_ADDRESS, BASIC_ABI, provider);
+
+    // Test basic contract call first
+    console.log('Testing contract connection...');
+    const agentCounter = await contract.agentCounter();
+    console.log('Agent counter:', agentCounter.toString());
     
-    if (!agent) {
-      return res.status(404).json({
-        success: false,
-        error: `Agent ${agentId} not found`,
-        availableAgents: Object.keys(mockAgents),
-        suggestion: 'Run "node registerTestAgents.js" to deploy real agents'
-      });
-    }
+    // Get agent info from contract
+    console.log('Getting agent info for agent:', agentId);
+    const agentInfo = await contract.getAgentInfo(BigInt(agentId));
+    console.log('Agent info received:', agentInfo);
+    
+    // Extract traits from parameters (agentInfo is a Result array)
+    const parameters = agentInfo[3]; // parameters is at index 3
+    const traits = {
+      popularity: Number(parameters[0]) || 50,
+      aggression: Number(parameters[1]) || 30,
+      loyalty: Number(parameters[2]) || 60,
+      resilience: Number(parameters[3]) || 50,
+      charisma: Number(parameters[4]) || 40,
+      suspicion: Number(parameters[5]) || 20,
+      energy: Number(parameters[6]) || 80
+    };
+    
+    // Calculate risk score: (Suspicion + Aggression) - (Popularity + Charisma + Resilience)
+    const riskScore = (traits.suspicion + traits.aggression) - (traits.popularity + traits.charisma + traits.resilience);
 
     res.status(200).json({
       success: true,
       agentId: agentId,
-      agentName: agent.name,
-      isActive: agent.isActive,
-      isAlive: agent.isAlive,
-      traits: agent.traits,
-      riskScore: agent.riskScore,
-      lastUpdated: agent.lastUpdated,
-      isMockData: true,
-      note: 'Using mock data - no agents deployed on contract'
+      agentName: agentInfo[2], // name is at index 2
+      isActive: Boolean(agentInfo[4]), // isActive is at index 4
+      isAlive: Boolean(agentInfo[5]), // isAlive is at index 5
+      traits: traits,
+      riskScore: riskScore,
+      lastUpdated: Number(agentInfo[7]).toString(), // lastUpdated is at index 7
+      isMockData: false,
+      note: 'Real data from contract'
     });
 
   } catch (error) {
-    console.error('Error getting agent traits:', error);
+    console.error('Error getting agent traits from contract:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      reason: error.reason
+    });
+    
+    // Fallback to mock data for testing
+    const mockAgents = {
+      "1": { name: "astro" }, // Real agent name from contract
+      "2": { name: "Priya" },
+      "3": { name: "Vikram" },
+      "4": { name: "Arjun" },
+      "5": { name: "Salman" },
+      "6": { name: "Shahrukh" },
+      "7": { name: "Aamir" },
+      "8": { name: "Hrithik" },
+      "9": { name: "Ranbir" },
+      "10": { name: "Varun" },
+      "11": { name: "Tiger" }
+    };
+
+    const mockAgent = mockAgents[agentId];
+    
+    if (mockAgent) {
+      return res.status(200).json({
+        success: true,
+        agentId: agentId,
+        agentName: mockAgent.name,
+        isActive: true,
+        isAlive: true,
+        traits: {
+          popularity: 50,
+          aggression: 30,
+          loyalty: 60,
+          resilience: 50,
+          charisma: 40,
+          suspicion: 20,
+          energy: 80
+        },
+        riskScore: 0,
+        lastUpdated: Date.now().toString(),
+        isMockData: true,
+        note: 'Using fallback mock data - contract call failed'
+      });
+    }
     
     res.status(500).json({
       success: false,

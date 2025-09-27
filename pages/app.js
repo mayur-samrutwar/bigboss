@@ -380,6 +380,31 @@ export default function App() {
     }
   }, [currentShowData]);
 
+  // Function to fetch agent names
+  const fetchAgentNames = async (agentIds) => {
+    try {
+      const agentNames = {};
+      for (const agentId of agentIds) {
+        try {
+          const response = await fetch(`/api/traits/getAgentTraits?agentId=${agentId}`);
+          const data = await response.json();
+          if (data.success) {
+            agentNames[agentId] = data.agentName;
+          } else {
+            agentNames[agentId] = `Agent #${agentId}`;
+          }
+        } catch (error) {
+          console.error(`Error fetching name for agent ${agentId}:`, error);
+          agentNames[agentId] = `Agent #${agentId}`;
+        }
+      }
+      return agentNames;
+    } catch (error) {
+      console.error('Error fetching agent names:', error);
+      return {};
+    }
+  };
+
   // Update participants when show participants data changes
   useEffect(() => {
     console.log('Current show participants data:', showParticipants);
@@ -390,10 +415,14 @@ export default function App() {
       console.log('Agent IDs:', agentIds);
       console.log('Participant addresses:', participantAddresses);
       
-      setParticipants(agentIds.map((id, index) => ({
-        agentId: id.toString(),
-        address: participantAddresses[index]
-      })));
+      // Fetch agent names
+      fetchAgentNames(agentIds.map(id => id.toString())).then(agentNames => {
+        setParticipants(agentIds.map((id, index) => ({
+          agentId: id.toString(),
+          address: participantAddresses[index],
+          name: agentNames[id.toString()] || `Agent #${id.toString()}`
+        })));
+      });
     } else {
       console.log('No show participants data, setting empty array');
       setParticipants([]);
@@ -733,7 +762,7 @@ export default function App() {
                     className="text-green-500"
                   />
                         <span className="text-green-400 font-mono text-sm">
-                          Agent #{participant.agentId}
+                          {participant.name || `Agent #${participant.agentId}`}
                         </span>
                       </div>
                       <div className="text-right">
@@ -832,7 +861,7 @@ export default function App() {
                     className="text-blue-500"
                   />
                       <span className="text-blue-400 font-mono text-sm">
-                        Agent #{participant.agentId}
+                        {participant.name || `Agent #${participant.agentId}`}
                       </span>
                     </div>
                     <span className="text-blue-300 font-mono text-xs">

@@ -17,6 +17,8 @@ export default function NextShow() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [userAgents, setUserAgents] = useState([]);
+  const [selectedAgentId, setSelectedAgentId] = useState('');
 
   // Contract read functions
   const { data: nextShowId } = useReadContract({
@@ -35,6 +37,14 @@ export default function NextShow() {
     address: SHOW_CONTRACT_ADDRESS,
     abi: SHOW_CONTRACT_ABI,
     functionName: 'getNextShowParticipants',
+  });
+
+  // Get user's agents
+  const { data: userAgentIds } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'getUserAgents',
+    args: address ? [address] : undefined,
   });
 
   // Update show info when contract data changes
@@ -57,15 +67,37 @@ export default function NextShow() {
   // Update participants when contract data changes
   useEffect(() => {
     if (nextShowParticipants) {
-      setParticipants(nextShowParticipants);
+      const [agentIds, participantAddresses] = nextShowParticipants;
+      setParticipants(agentIds.map((id, index) => ({
+        agentId: id.toString(),
+        address: participantAddresses[index]
+      })));
     }
   }, [nextShowParticipants]);
+
+  // Update user agents when contract data changes
+  useEffect(() => {
+    console.log('User agent IDs from contract:', userAgentIds);
+    console.log('User address:', address);
+    
+    if (userAgentIds && userAgentIds.length > 0) {
+      setUserAgents(userAgentIds.map(id => id.toString()));
+      // Auto-select first agent if none selected
+      if (!selectedAgentId && userAgentIds.length > 0) {
+        setSelectedAgentId(userAgentIds[0].toString());
+      }
+    } else {
+      setUserAgents([]);
+      setSelectedAgentId('');
+    }
+  }, [userAgentIds, selectedAgentId]);
 
   // Handle transaction success
   useEffect(() => {
     if (isConfirmed) {
       setError('');
       setSuccess('Successfully joined the next show!');
+      setLoading(false);
       // Refresh participants
       setTimeout(() => {
         window.location.reload();
@@ -77,6 +109,7 @@ export default function NextShow() {
   useEffect(() => {
     if (writeError) {
       setError('Transaction failed: ' + writeError.message);
+      setLoading(false);
     }
   }, [writeError]);
 
@@ -91,17 +124,20 @@ export default function NextShow() {
       return;
     }
 
+    if (!selectedAgentId || selectedAgentId === '') {
+      setError('Please select an agent to participate');
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
       
-      // For now, we'll use agent ID 1 as a placeholder
-      // In a real implementation, you'd need to get the user's agent ID
       writeContract({
         address: SHOW_CONTRACT_ADDRESS,
         abi: SHOW_CONTRACT_ABI,
         functionName: 'participateInNextShow',
-        args: [BigInt(1)], // Agent ID - this should be dynamic
+        args: [BigInt(selectedAgentId)],
         value: showInfo?.entryFee ? (parseFloat(showInfo.entryFee) * 1e18).toString() : '0'
       });
     } catch (err) {
@@ -111,10 +147,13 @@ export default function NextShow() {
   };
 
   const formatTime = (timestamp) => {
+    if (!timestamp || timestamp === 0) return 'Not set';
     return new Date(timestamp).toLocaleString();
   };
 
   const getTimeRemaining = (startTime) => {
+    if (!startTime || startTime === 0) return 'Not set';
+    
     const now = Date.now();
     const remaining = startTime - now;
     
@@ -130,197 +169,175 @@ export default function NextShow() {
   };
 
   return (
-    <div className="relative w-full h-screen bg-black">
-      {/* CRT Monitor Screen - Full Screen */}
-      <div className="relative w-full h-full bg-black overflow-hidden crt-screen">
-        {/* CRT Scanlines */}
-        <div className="absolute inset-0 scanlines"></div>
+    <div className="w-full min-h-screen bg-white p-8 overflow-y-auto">
+      <div className="max-w-4xl mx-auto">
+        {/* Title */}
+        <h1 className="text-4xl font-bold text-gray-800 mb-8">Next Show</h1>
         
-        {/* Heavy Noise Texture */}
-        <div className="absolute inset-0 noise"></div>
-
-        {/* Dense Noise Particles */}
-        <div className="absolute inset-0 pointer-events-none">
-          {[...Array(800)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute bg-white"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                width: `${Math.random() * 2 + 0.5}px`,
-                height: `${Math.random() * 2 + 0.5}px`,
-                opacity: Math.random() * 0.9 + 0.1,
-                animation: `noise ${Math.random() * 0.3 + 0.05}s linear infinite`
-              }}
-            />
-          ))}
+        {/* Wallet Connect */}
+        <div className="mb-8">
+          <WalletConnect />
         </div>
 
-        {/* Content Area */}
-        <div className="relative z-10 w-full h-full flex items-center justify-center">
-          <div className="text-center max-w-4xl mx-auto px-8">
-            {/* Title */}
-            <h1 className="text-6xl font-bold text-green-400 mb-8 font-mono" style={{
-              textShadow: '0 0 20px #00ff00, 0 0 40px #00ff00',
-              animation: 'glow 2s ease-in-out infinite alternate'
-            }}>
-              NEXT SHOW
-            </h1>
+        {/* Debug Info */}
+        {address && (
+          <div className="mb-6 p-4 bg-gray-100 border border-gray-300 rounded text-sm">
+            <h3 className="font-semibold mb-2">Debug Info:</h3>
+            <p><strong>Connected Address:</strong> {address}</p>
+            <p><strong>User Agent IDs:</strong> {userAgentIds ? userAgentIds.map(id => id.toString()).join(', ') : 'Loading...'}</p>
+            <p><strong>User Agents State:</strong> {userAgents.join(', ') || 'None'}</p>
+            <p><strong>Selected Agent:</strong> {selectedAgentId || 'None'}</p>
+          </div>
+        )}
 
-            {/* Wallet Connect */}
-            <div className="mb-8">
-              <WalletConnect />
-            </div>
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+            ERROR: {error}
+          </div>
+        )}
 
-            {/* Error Message */}
-            {error && (
-              <div className="bg-red-900/20 border border-red-500 text-red-400 font-mono p-4 rounded mb-6">
-                ERROR: {error}
+        {/* Success Message */}
+        {success && (
+          <div className="mb-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
+            SUCCESS: {success}
+          </div>
+        )}
+
+        {/* Next Show Info */}
+        {showInfo ? (
+          <div className="mb-8 p-6 bg-blue-50 border border-blue-200 rounded">
+            <h2 className="text-xl font-semibold text-blue-800 mb-4">Upcoming Show #{showInfo.showId}</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <span className="font-medium">Start Time:</span>
+                <span className="ml-2">{formatTime(showInfo.startTime)}</span>
               </div>
-            )}
-
-            {/* Success Message */}
-            {success && (
-              <div className="bg-green-900/20 border border-green-500 text-green-400 font-mono p-4 rounded mb-6">
-                SUCCESS: {success}
+              
+              <div>
+                <span className="font-medium">Time Until Start:</span>
+                <span className="ml-2">{getTimeRemaining(showInfo.startTime)}</span>
               </div>
-            )}
-
-            {/* Next Show Info */}
-            {showInfo ? (
-              <div className="bg-blue-900/20 border border-blue-500 rounded-lg p-6 mb-8">
-                <h2 className="text-blue-400 font-mono text-2xl mb-4">UPCOMING SHOW #{showInfo.showId}</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-blue-300 font-mono">
-                  <div>
-                    <strong>Start Time:</strong> {formatTime(showInfo.startTime)}
-                  </div>
-                  <div>
-                    <strong>Time Until Start:</strong> {getTimeRemaining(showInfo.startTime)}
-                  </div>
-                  <div>
-                    <strong>Entry Fee:</strong> {showInfo.entryFee} ETH
-                  </div>
-                  <div>
-                    <strong>Prize Pool:</strong> {showInfo.totalPrize} ETH
-                  </div>
-                  <div>
-                    <strong>Participants:</strong> {showInfo.participantCount}/10
-                  </div>
-                  <div>
-                    <strong>Status:</strong> {showInfo.isActive ? 'ACTIVE' : 'PREPARATION'}
-                  </div>
-                </div>
+              
+              <div>
+                <span className="font-medium">Entry Fee:</span>
+                <span className="ml-2">{showInfo.entryFee} ETH</span>
               </div>
-            ) : (
-              <div className="bg-gray-900/20 border border-gray-500 text-gray-400 font-mono p-6 rounded mb-8">
-                <h2 className="text-gray-400 font-mono text-2xl mb-4">NO UPCOMING SHOW</h2>
-                <p>No show is currently available for participation.</p>
+              
+              <div>
+                <span className="font-medium">Prize Pool:</span>
+                <span className="ml-2">{showInfo.totalPrize} ETH</span>
               </div>
-            )}
-
-            {/* Participants List */}
-            {participants && participants.length > 0 && (
-              <div className="bg-green-900/20 border border-green-500 rounded-lg p-6 mb-8">
-                <h2 className="text-green-400 font-mono text-2xl mb-4">REGISTERED PARTICIPANTS</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-green-300 font-mono">
-                  {participants.map((participant, index) => (
-                    <div key={index} className="bg-green-800/20 p-2 rounded">
-                      Agent #{participant.toString()}
-                    </div>
-                  ))}
-                </div>
+              
+              <div>
+                <span className="font-medium">Participants:</span>
+                <span className="ml-2">{showInfo.participantCount}/10</span>
               </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button
-                onClick={participateInShow}
-                disabled={!isConnected || !nextShowId || loading || isPending || isConfirming}
-                className="bg-green-500 hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold py-4 px-8 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
-                style={{
-                  fontFamily: 'monospace',
-                  textShadow: '0 0 10px #00ff00'
-                }}
-              >
-                {loading || isPending ? 'JOINING...' : isConfirming ? 'CONFIRMING...' : 'JOIN NEXT SHOW'}
-              </button>
-
-              <button
-                onClick={() => router.push('/app')}
-                className="bg-blue-500 hover:bg-blue-400 text-white font-bold py-4 px-8 rounded-lg border-2 border-blue-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50"
-                style={{
-                  fontFamily: 'monospace',
-                  textShadow: '0 0 10px #0066ff'
-                }}
-              >
-                VIEW CURRENT SHOW
-              </button>
-
-              <button
-                onClick={() => router.push('/register')}
-                className="bg-purple-500 hover:bg-purple-400 text-white font-bold py-4 px-8 rounded-lg border-2 border-purple-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-purple-500/50"
-                style={{
-                  fontFamily: 'monospace',
-                  textShadow: '0 0 10px #8000ff'
-                }}
-              >
-                CREATE AGENT
-              </button>
+              
+              <div>
+                <span className="font-medium">Status:</span>
+                <span className={`ml-2 ${showInfo.isActive ? 'text-green-600' : 'text-yellow-600'}`}>
+                  {showInfo.isActive ? 'ACTIVE' : 'PREPARATION'}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="mb-8 p-6 bg-gray-50 border border-gray-200 rounded">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">No Upcoming Show</h2>
+            <p className="text-gray-600">No show is currently available for participation.</p>
+            <div className="mt-4 text-sm text-gray-500">
+              <p>Next Show ID: {nextShowId || 'None'}</p>
+            </div>
+          </div>
+        )}
 
-        {/* Screen Flicker Effect */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div 
-            className="w-full h-full bg-black opacity-0"
-            style={{
-              animation: 'screenFlicker 0.1s linear infinite'
-            }}
-          />
+        {/* Participants List */}
+        {participants && participants.length > 0 && (
+          <div className="mb-8 p-6 bg-green-50 border border-green-200 rounded">
+            <h2 className="text-xl font-semibold text-green-800 mb-4">Registered Participants</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {participants.map((participant, index) => (
+                <div key={index} className="bg-green-100 p-2 rounded">
+                  Agent #{participant.agentId} - {participant.address.slice(0, 6)}...{participant.address.slice(-4)}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Join Show Section */}
+        {showInfo && (
+          <div className="mb-8 p-6 bg-gray-50 border border-gray-200 rounded">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Join Next Show</h2>
+            
+            {userAgents.length > 0 ? (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Your Agent:
+                </label>
+                <select
+                  value={selectedAgentId}
+                  onChange={(e) => setSelectedAgentId(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded"
+                >
+                  <option value="">Choose an agent...</option>
+                  {userAgents.map((agentId) => (
+                    <option key={agentId} value={agentId}>
+                      Agent #{agentId}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
+                <p className="text-yellow-800">
+                  <strong>No agents found!</strong> You need to create an agent first.
+                </p>
+                <button
+                  onClick={() => router.push('/register')}
+                  className="mt-2 bg-purple-500 hover:bg-purple-600 text-white font-bold py-1 px-3 rounded text-sm"
+                >
+                  Create Agent
+                </button>
+              </div>
+            )}
+            
+            <button
+              onClick={participateInShow}
+              disabled={!isConnected || !nextShowId || !selectedAgentId || loading || isPending || isConfirming}
+              className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded"
+            >
+              {loading || isPending ? 'Joining...' : isConfirming ? 'Confirming...' : `Join Show (${showInfo.entryFee} ETH)`}
+            </button>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <button
+            onClick={() => router.push('/app')}
+            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
+          >
+            View Current Show
+          </button>
+
+          <button
+            onClick={() => router.push('/register')}
+            className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded"
+          >
+            Create Agent
+          </button>
+
+          <button
+            onClick={() => router.push('/admin')}
+            className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded"
+          >
+            Admin Panel
+          </button>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes glow {
-          from { text-shadow: 0 0 20px #00ff00, 0 0 40px #00ff00; }
-          to { text-shadow: 0 0 30px #00ff00, 0 0 60px #00ff00; }
-        }
-        
-        @keyframes screenFlicker {
-          0%, 100% { opacity: 0; }
-          50% { opacity: 0.02; }
-        }
-        
-        .crt-screen {
-          background: linear-gradient(90deg, transparent 50%, rgba(0, 255, 0, 0.03) 50%);
-          background-size: 2px 100%;
-        }
-        
-        .scanlines {
-          background: linear-gradient(180deg, transparent 50%, rgba(0, 255, 0, 0.03) 50%);
-          background-size: 100% 2px;
-        }
-        
-        .noise {
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-        }
-        
-        @keyframes noise {
-          0%, 100% { transform: translate(0, 0); }
-          10% { transform: translate(-5%, -5%); }
-          20% { transform: translate(-10%, 5%); }
-          30% { transform: translate(5%, -10%); }
-          40% { transform: translate(-5%, 15%); }
-          50% { transform: translate(-10%, 5%); }
-          60% { transform: translate(15%, 0%); }
-          70% { transform: translate(0%, 15%); }
-          80% { transform: translate(-15%, 10%); }
-          90% { transform: translate(10%, 5%); }
-        }
-      `}</style>
     </div>
   );
 }

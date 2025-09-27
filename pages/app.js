@@ -796,60 +796,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* News Sidebar - Left Side */}
-      <div className={`absolute top-1/2 left-0 transform -translate-y-1/2 bg-black/90 backdrop-blur-sm border-r-2 border-orange-500 transition-all duration-300 z-20 ${newsOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'}`} style={{ width: '350px' }}>
-        <div className="p-6">
-          {/* Panel Header */}
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-orange-400 font-mono text-lg">📰 NEWS UPDATES</h2>
-            <button
-              onClick={() => setNewsOpen(false)}
-              className="text-orange-400 hover:text-orange-300 font-mono text-xl"
-            >
-              ×
-            </button>
-          </div>
-
-          {/* News Feed */}
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {newsUpdates.map((news) => (
-              <div key={news.id} className="p-3 bg-gray-800/50 border border-orange-500/30 rounded">
-                <div className="flex items-start space-x-2">
-                  <div className="text-orange-400 text-sm font-mono">
-                    {news.type === 'betrayal' && '💔'}
-                    {news.type === 'elimination' && '💀'}
-                    {news.type === 'alliance' && '🤝'}
-                    {news.type === 'task' && '📋'}
-                    {news.type === 'general' && '📢'}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-orange-300 font-mono text-sm leading-relaxed">
-                      {news.content}
-                    </p>
-                    <div className="text-orange-500 font-mono text-xs mt-1">
-                      {news.time}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Refresh Button */}
-          <div className="mt-4 text-center">
-            <button
-              onClick={() => {
-                // In a real app, this would refresh news data
-                console.log('Refreshing news...');
-              }}
-              className="bg-orange-500 hover:bg-orange-400 text-white font-bold py-2 px-4 rounded text-sm"
-            >
-              REFRESH NEWS
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Floating Voting Panel */}
       <div className={`absolute top-1/2 right-0 transform -translate-y-1/2 bg-black/90 backdrop-blur-sm border-l-2 border-blue-500 transition-all duration-300 z-20 ${votingOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}`} style={{ width: '350px' }}>
         <div className="p-6">

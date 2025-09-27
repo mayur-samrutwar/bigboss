@@ -1,5 +1,7 @@
 import WalletConnect from '../components/WalletConnect';
 import Character from '../components/Character';
+import EventPopup from '../components/EventPopup';
+import WinnerPopup from '../components/WinnerPopup';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
@@ -27,6 +29,15 @@ export default function App() {
   const [eliminationNotification, setEliminationNotification] = useState(null);
   const [eliminationHistory, setEliminationHistory] = useState([]);
   const [newsUpdates, setNewsUpdates] = useState([]);
+  const [currentShowNews, setCurrentShowNews] = useState([]);
+  const [agentNews, setAgentNews] = useState([]);
+  const [lastPollTime, setLastPollTime] = useState(new Date().toISOString());
+  
+  // Popup states
+  const [eventPopupOpen, setEventPopupOpen] = useState(false);
+  const [winnerPopupOpen, setWinnerPopupOpen] = useState(false);
+  const [currentEventData, setCurrentEventData] = useState(null);
+  const [currentWinnerData, setCurrentWinnerData] = useState(null);
 
   // Contract read functions
   const { data: currentShowId } = useReadContract({
@@ -163,6 +174,11 @@ export default function App() {
   const handleCharacterClick = (characterData) => {
     setSelectedCharacter(characterData);
     setCharacterInfoOpen(true);
+    
+    // Fetch news for this specific agent
+    if (characterData?.participant?.agentId) {
+      fetchAgentNews(characterData.participant.agentId);
+    }
   };
 
   // Function to trigger elimination
@@ -225,6 +241,22 @@ export default function App() {
     setEliminationNotification(null);
   };
 
+  // Test functions for popups
+  const triggerEventPopup = () => {
+    setCurrentEventData({
+      content: "Agent #3 has formed a secret alliance with Agent #7! This unexpected partnership could change the entire game dynamics."
+    });
+    setEventPopupOpen(true);
+  };
+
+  const triggerWinnerPopup = () => {
+    setCurrentWinnerData({
+      characterName: "Agent #5",
+      agentId: "5"
+    });
+    setWinnerPopupOpen(true);
+  };
+
   // Function to add news update
   const addNewsUpdate = (content, type) => {
     const newsItem = {
@@ -277,6 +309,61 @@ export default function App() {
     }
   };
 
+  // Function to fetch current show news
+  const fetchCurrentShowNews = async () => {
+    if (!currentShowId) return;
+    
+    try {
+      const response = await fetch(`/api/news?showId=${currentShowId}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setCurrentShowNews(data.data);
+        console.log(`📰 Fetched ${data.data.length} news items for show ${currentShowId}`);
+      }
+    } catch (error) {
+      console.error('Error fetching current show news:', error);
+    }
+  };
+
+  // Function to fetch agent-specific news
+  const fetchAgentNews = async (agentId) => {
+    if (!currentShowId || !agentId) return;
+    
+    try {
+      const response = await fetch(`/api/news/agent?showId=${currentShowId}&agentId=${agentId}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setAgentNews(data.data);
+        console.log(`📰 Fetched ${data.data.length} news items for agent ${agentId}`);
+      }
+    } catch (error) {
+      console.error('Error fetching agent news:', error);
+    }
+  };
+
+  // Function to poll for new news
+  const pollForNewNews = async () => {
+    if (!currentShowId) return;
+    
+    try {
+      const response = await fetch(`/api/news/poll?showId=${currentShowId}&lastPollTime=${lastPollTime}`);
+      const data = await response.json();
+      
+      if (data.success && data.hasNewNews) {
+        // Show alert for new news
+        setSuccess(`🚨 ${data.message}`);
+        // Refresh current show news
+        fetchCurrentShowNews();
+        // Update last poll time
+        setLastPollTime(new Date().toISOString());
+      }
+    } catch (error) {
+      console.error('Error polling for new news:', error);
+    }
+  };
+
   // Update show info when contract data changes
   useEffect(() => {
     if (currentShowData) {
@@ -317,8 +404,22 @@ export default function App() {
   useEffect(() => {
     if (currentShowId && showInfo?.isActive) {
       fetchRecentActions();
+      fetchCurrentShowNews();
     }
   }, [currentShowId, showInfo]);
+
+  // Poll for new news every 15 seconds when show is active
+  useEffect(() => {
+    if (!currentShowId || !showInfo?.isActive) {
+      return;
+    }
+
+    const pollInterval = setInterval(() => {
+      pollForNewNews();
+    }, 15000); // Poll every 15 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [currentShowId, showInfo?.isActive, lastPollTime]);
 
   // Handle transaction success
   useEffect(() => {
@@ -422,16 +523,16 @@ export default function App() {
             } else {
               console.log('No participants, showing 3 placeholder characters');
               return Array.from({ length: 3 }, (_, index) => (
-                <Character 
+          <Character 
                   key={`placeholder-${index}`}
-                  roomWidth={imageWidth}
-                  roomHeight={imageHeight}
-                  imageWidth={imageWidth}
-                  imageHeight={imageHeight}
-                  onCharacterClick={handleCharacterClick}
+            roomWidth={imageWidth}
+            roomHeight={imageHeight}
+            imageWidth={imageWidth}
+            imageHeight={imageHeight}
+            onCharacterClick={handleCharacterClick}
                   participant={null}
                   index={index}
-                />
+          />
               ));
             }
           })()}
@@ -504,6 +605,66 @@ export default function App() {
         </button>
       </div>
 
+      {/* News Sidebar - Left Side */}
+      <div className={`absolute top-1/2 left-0 transform -translate-y-1/2 bg-black/90 backdrop-blur-sm border-r-2 border-orange-500 transition-all duration-300 z-20 ${newsOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'}`} style={{ width: '350px' }}>
+        <div className="p-6">
+          {/* Panel Header */}
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-orange-400 font-mono text-lg">📰 SHOW NEWS</h2>
+            <button
+              onClick={() => setNewsOpen(false)}
+              className="text-orange-400 hover:text-orange-300 font-mono text-xl"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* News Feed */}
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {currentShowNews.length > 0 ? (
+              currentShowNews.map((news) => (
+                <div key={news.id} className="p-3 bg-gray-800/50 border border-orange-500/30 rounded">
+                  <div className="flex items-start space-x-2">
+                    <div className="text-orange-400 text-sm font-mono">
+                      {news.action_type === 'betrayal' && '💔'}
+                      {news.action_type === 'elimination' && '💀'}
+                      {news.action_type === 'alliance' && '🤝'}
+                      {news.action_type === 'task' && '📋'}
+                      {news.action_type === 'general' && '📢'}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-orange-300 font-mono text-sm leading-relaxed">
+                        {news.content}
+                      </p>
+                      <div className="text-orange-500 font-mono text-xs mt-1">
+                        Agent {news.agent_id} • {new Date(news.created_at).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-orange-400 font-mono text-sm text-center py-8">
+                No news updates yet...
+              </div>
+            )}
+          </div>
+
+          {/* Refresh Button */}
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => {
+                fetchCurrentShowNews();
+                console.log('Refreshing news...');
+              }}
+              className="bg-orange-500 hover:bg-orange-400 text-white font-bold py-2 px-4 rounded text-sm"
+            >
+              REFRESH NEWS
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Scroll Buttons */}
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 flex space-x-4">
         {/* Left Scroll Button */}
@@ -559,18 +720,18 @@ export default function App() {
                   return (
                     <label key={participant.agentId} className="flex items-center justify-between cursor-pointer p-2 rounded border border-green-500/30 hover:border-green-400">
                       <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
+                  <input
+                    type="checkbox"
                           checked={selectedWinner === participant.agentId}
-                          onChange={(e) => {
-                            if (e.target.checked) {
+                    onChange={(e) => {
+                      if (e.target.checked) {
                               setSelectedWinner(participant.agentId);
-                            } else {
-                              setSelectedWinner('');
-                            }
-                          }}
-                          className="text-green-500"
-                        />
+                      } else {
+                        setSelectedWinner('');
+                      }
+                    }}
+                    className="text-green-500"
+                  />
                         <span className="text-green-400 font-mono text-sm">
                           Agent #{participant.agentId}
                         </span>
@@ -588,7 +749,7 @@ export default function App() {
                           </div>
                         )}
                       </div>
-                    </label>
+                </label>
                   );
                 })
               ) : (
@@ -713,17 +874,17 @@ export default function App() {
                 participants.map((participant) => (
                   <label key={participant.agentId} className="flex items-center justify-between cursor-pointer p-2 rounded border border-blue-500/30 hover:border-blue-400">
                     <div className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        name="vote"
+                  <input
+                    type="radio"
+                    name="vote"
                         checked={selectedVote === participant.agentId}
-                        onChange={(e) => {
-                          if (e.target.checked) {
+                    onChange={(e) => {
+                      if (e.target.checked) {
                             setSelectedVote(participant.agentId);
-                          }
-                        }}
-                        className="text-blue-500"
-                      />
+                      }
+                    }}
+                    className="text-blue-500"
+                  />
                       <span className="text-blue-400 font-mono text-sm">
                         Agent #{participant.agentId}
                       </span>
@@ -731,7 +892,7 @@ export default function App() {
                     <span className="text-blue-300 font-mono text-xs">
                       {participant.address.slice(0, 6)}...{participant.address.slice(-4)}
                     </span>
-                  </label>
+                </label>
                 ))
               ) : (
                 <div className="text-gray-400 font-mono text-sm text-center py-4">
@@ -841,6 +1002,42 @@ export default function App() {
                 </p>
               </div>
 
+              {/* Agent News Section */}
+              {selectedCharacter.participant && (
+                <div className="mb-4">
+                  <h4 className="text-purple-400 font-mono text-sm mb-2">📰 AGENT NEWS</h4>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {agentNews.length > 0 ? (
+                      agentNews.map((news) => (
+                        <div key={news.id} className="p-2 bg-purple-900/30 border border-purple-500/30 rounded text-xs">
+                          <div className="flex items-start space-x-2">
+                            <div className="text-purple-400 text-xs">
+                              {news.action_type === 'betrayal' && '💔'}
+                              {news.action_type === 'elimination' && '💀'}
+                              {news.action_type === 'alliance' && '🤝'}
+                              {news.action_type === 'task' && '📋'}
+                              {news.action_type === 'general' && '📢'}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-purple-300 font-mono text-xs leading-relaxed">
+                                {news.content}
+                              </p>
+                              <div className="text-purple-500 font-mono text-xs mt-1">
+                                {new Date(news.created_at).toLocaleTimeString()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-purple-400 font-mono text-xs text-center py-2">
+                        No news for this agent yet...
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="space-y-2">
                 <button
@@ -918,7 +1115,43 @@ export default function App() {
         >
           NEXT SHOW
         </button>
+
+        {/* Test Popup Buttons */}
+        <button
+          onClick={triggerEventPopup}
+          className="bg-orange-500 hover:bg-orange-400 text-white font-bold py-2 px-4 rounded-lg border-2 border-orange-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-orange-500/50"
+          style={{
+            fontFamily: 'monospace',
+            textShadow: '0 0 10px #ff8000'
+          }}
+        >
+          TEST EVENT
+        </button>
+        
+        <button
+          onClick={triggerWinnerPopup}
+          className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded-lg border-2 border-yellow-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-yellow-500/50"
+          style={{
+            fontFamily: 'monospace',
+            textShadow: '0 0 10px #FFD700'
+          }}
+        >
+          TEST WINNER
+        </button>
       </div>
+
+      {/* Popup Components */}
+      <EventPopup 
+        isOpen={eventPopupOpen}
+        onClose={() => setEventPopupOpen(false)}
+        eventData={currentEventData}
+      />
+      
+      <WinnerPopup 
+        isOpen={winnerPopupOpen}
+        onClose={() => setWinnerPopupOpen(false)}
+        winnerData={currentWinnerData}
+      />
 
     </div>
   );

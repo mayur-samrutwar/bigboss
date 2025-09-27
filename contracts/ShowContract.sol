@@ -480,7 +480,7 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
     function participateInShow(
         uint256 _showId,
         uint256 _agentId
-    ) external payable nonReentrant showExists(_showId) showActive(_showId) agentExists(_agentId) agentActive(_agentId) agentAlive(_agentId) {
+    ) external payable nonReentrant showExists(_showId) agentExists(_agentId) agentActive(_agentId) agentAlive(_agentId) {
         require(_showId == nextShowId, "Can only participate in next show");
         require(agents[_agentId].owner == msg.sender, "Not the agent owner");
         require(block.timestamp < shows[_showId].endTime, "Show has ended");

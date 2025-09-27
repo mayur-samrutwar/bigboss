@@ -179,14 +179,23 @@ export default function App() {
 
   // Update participants when show participants data changes
   useEffect(() => {
-    if (nextShowParticipants) {
-      const [agentIds, participantAddresses] = nextShowParticipants;
+    console.log('Current show participants data:', showParticipants);
+    console.log('Current show ID:', currentShowId);
+    
+    if (showParticipants) {
+      const [agentIds, participantAddresses] = showParticipants;
+      console.log('Agent IDs:', agentIds);
+      console.log('Participant addresses:', participantAddresses);
+      
       setParticipants(agentIds.map((id, index) => ({
         agentId: id.toString(),
         address: participantAddresses[index]
       })));
+    } else {
+      console.log('No show participants data, setting empty array');
+      setParticipants([]);
     }
-  }, [nextShowParticipants]);
+  }, [showParticipants, currentShowId]);
 
   // Handle transaction success
   useEffect(() => {
@@ -259,7 +268,7 @@ export default function App() {
         }}
       />
       
-      {/* Character - Positioned relative to the image container */}
+      {/* Characters - Positioned relative to the image container */}
       {imageWidth > 0 && imageHeight > 0 && (
         <div 
           className="absolute top-0 left-0"
@@ -269,13 +278,40 @@ export default function App() {
             transform: `translateX(-${scrollPosition}px)`,
           }}
         >
-          <Character 
-            roomWidth={imageWidth}
-            roomHeight={imageHeight}
-            imageWidth={imageWidth}
-            imageHeight={imageHeight}
-            onCharacterClick={handleCharacterClick}
-          />
+          {/* Render characters based on participants count */}
+          {(() => {
+            console.log('Rendering characters. Participants count:', participants.length);
+            console.log('Participants:', participants);
+            
+            if (participants.length > 0) {
+              return participants.map((participant, index) => (
+                <Character 
+                  key={participant.agentId}
+                  roomWidth={imageWidth}
+                  roomHeight={imageHeight}
+                  imageWidth={imageWidth}
+                  imageHeight={imageHeight}
+                  onCharacterClick={handleCharacterClick}
+                  participant={participant}
+                  index={index}
+                />
+              ));
+            } else {
+              console.log('No participants, showing 3 placeholder characters');
+              return Array.from({ length: 3 }, (_, index) => (
+                <Character 
+                  key={`placeholder-${index}`}
+                  roomWidth={imageWidth}
+                  roomHeight={imageHeight}
+                  imageWidth={imageWidth}
+                  imageHeight={imageHeight}
+                  onCharacterClick={handleCharacterClick}
+                  participant={null}
+                  index={index}
+                />
+              ));
+            }
+          })()}
         </div>
       )}
 
@@ -618,32 +654,38 @@ export default function App() {
               <div className="space-y-2">
                 <button
                   onClick={() => {
-                    setSelectedWinner(selectedCharacter.name);
+                    if (selectedCharacter.participant) {
+                      setSelectedWinner(selectedCharacter.participant.agentId);
+                    }
                     setCharacterInfoOpen(false);
                     setSidebarOpen(true);
                   }}
-                  className="w-full bg-green-500 hover:bg-green-400 text-black font-bold py-2 px-4 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
+                  disabled={!selectedCharacter.participant}
+                  className="w-full bg-green-500 hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold py-2 px-4 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
                   style={{
                     fontFamily: 'monospace',
                     textShadow: '0 0 10px #00ff00'
                   }}
                 >
-                  PREDICT WINNER
+                  {selectedCharacter.participant ? 'PREDICT WINNER' : 'NO PARTICIPANT DATA'}
                 </button>
                 
                 <button
                   onClick={() => {
-                    setSelectedVote(selectedCharacter.name);
+                    if (selectedCharacter.participant) {
+                      setSelectedVote(selectedCharacter.participant.agentId);
+                    }
                     setCharacterInfoOpen(false);
                     setVotingOpen(true);
                   }}
-                  className="w-full bg-blue-500 hover:bg-blue-400 text-white font-bold py-2 px-4 rounded-lg border-2 border-blue-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50"
+                  disabled={!selectedCharacter.participant}
+                  className="w-full bg-blue-500 hover:bg-blue-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-lg border-2 border-blue-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50"
                   style={{
                     fontFamily: 'monospace',
                     textShadow: '0 0 10px #0066ff'
                   }}
                 >
-                  VOTE FOR THIS CONTESTANT
+                  {selectedCharacter.participant ? 'VOTE FOR THIS CONTESTANT' : 'NO PARTICIPANT DATA'}
                 </button>
               </div>
             </div>

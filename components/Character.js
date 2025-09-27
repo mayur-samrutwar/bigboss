@@ -1,11 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const Character = ({ roomWidth, roomHeight, imageWidth, imageHeight, onCharacterClick }) => {
-  const [position, setPosition] = useState({ x: 100, y: 100 });
-  const [direction, setDirection] = useState('down');
-  const [animationFrame, setAnimationFrame] = useState(0);
-  const [isMoving, setIsMoving] = useState(true);
-
+const Character = ({ roomWidth, roomHeight, imageWidth, imageHeight, onCharacterClick, participant, index }) => {
   // Character sprite sheet info
   const spriteSize = 576; // 576x576 per character
   const frameSize = 144; // 576/4 = 144px per frame
@@ -17,18 +12,42 @@ const Character = ({ roomWidth, roomHeight, imageWidth, imageHeight, onCharacter
     up: 3      // Row 4
   };
 
-  // Random character selection (1-11)
-  const [characterId] = useState(Math.floor(Math.random() * 11) + 1);
-  
+  // Character selection based on participant or random for placeholders
+  const [characterId] = useState(() => {
+    return participant ? 
+      (parseInt(participant.agentId) % 11) + 1 : // Use agent ID to determine character
+      Math.floor(Math.random() * 11) + 1; // Random for placeholders
+  });
+
+  // Initial position based on index to spread characters
+  const [initialPosition] = useState(() => {
+    const initialX = participant ? 
+      (index * 200 + 100) % (imageWidth - frameSize) : // Spread participants
+      Math.floor(Math.random() * (imageWidth - frameSize)); // Random for placeholders
+    const initialY = participant ?
+      (index * 150 + 100) % (imageHeight - frameSize) : // Spread participants
+      Math.floor(Math.random() * (imageHeight - frameSize)); // Random for placeholders
+    
+    return { x: initialX, y: initialY };
+  });
+
+  const [position, setPosition] = useState(initialPosition);
+  const [direction, setDirection] = useState(directions[Math.floor(Math.random() * directions.length)]);
+  const [animationFrame, setAnimationFrame] = useState(0);
+  const [isMoving, setIsMoving] = useState(true);
+
   // Character data
   const characterData = {
     id: characterId,
-    name: `Contestant ${String.fromCharCode(64 + characterId)}`,
+    name: participant ? `Agent #${participant.agentId}` : `Contestant ${String.fromCharCode(64 + characterId)}`,
     personality: ['Bold', 'Strategic', 'Dramatic', 'Funny', 'Mysterious', 'Energetic', 'Calm', 'Aggressive', 'Charming', 'Intelligent', 'Wild'][characterId - 1] || 'Unique',
-    strength: Math.floor(Math.random() * 10) + 1,
-    intelligence: Math.floor(Math.random() * 10) + 1,
-    charisma: Math.floor(Math.random() * 10) + 1,
-    description: `A ${['bold', 'strategic', 'dramatic', 'funny', 'mysterious', 'energetic', 'calm', 'aggressive', 'charming', 'intelligent', 'wild'][characterId - 1] || 'unique'} contestant with great potential to win Big Boss 17.`
+    strength: participant ? Math.floor(Math.random() * 10) + 1 : Math.floor(Math.random() * 10) + 1,
+    intelligence: participant ? Math.floor(Math.random() * 10) + 1 : Math.floor(Math.random() * 10) + 1,
+    charisma: participant ? Math.floor(Math.random() * 10) + 1 : Math.floor(Math.random() * 10) + 1,
+    description: participant ? 
+      `Agent #${participant.agentId} - A ${['bold', 'strategic', 'dramatic', 'funny', 'mysterious', 'energetic', 'calm', 'aggressive', 'charming', 'intelligent', 'wild'][characterId - 1] || 'unique'} contestant with great potential to win Big Boss 17.` :
+      `A ${['bold', 'strategic', 'dramatic', 'funny', 'mysterious', 'energetic', 'calm', 'aggressive', 'charming', 'intelligent', 'wild'][characterId - 1] || 'unique'} contestant with great potential to win Big Boss 17.`,
+    participant: participant
   };
 
   useEffect(() => {

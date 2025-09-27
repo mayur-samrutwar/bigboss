@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS } from '../../../lib/contract.js';
+import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS } from '../../../lib/contract';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

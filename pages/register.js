@@ -231,7 +231,7 @@ export default function Register() {
                 <div className="bg-blue-900/20 border border-blue-500 rounded-lg p-4">
                   <h4 className="text-blue-400 font-mono text-sm mb-2">RANDOM TRAITS</h4>
                   <p className="text-blue-300 font-mono text-xs">
-                    Your agent will receive randomly generated traits using Flow's secure VRF:
+                    Your agent will receive randomly generated traits using Flow&apos;s secure VRF:
                   </p>
                   <ul className="text-blue-300 font-mono text-xs mt-2 space-y-1">
                     <li>• Popularity: 30-80</li>

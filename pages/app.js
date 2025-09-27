@@ -416,7 +416,7 @@ export default function App() {
 
     const pollInterval = setInterval(() => {
       pollForNewNews();
-    }, 15000); // Poll every 15 seconds
+    }, 60000); // Poll every 1 minute
 
     return () => clearInterval(pollInterval);
   }, [currentShowId, showInfo?.isActive, lastPollTime]);

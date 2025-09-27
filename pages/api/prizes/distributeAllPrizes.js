@@ -1,35 +1,27 @@
 import { ethers } from 'ethers';
-import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS, PREDICTION_MARKET_ABI, PREDICTION_MARKET_ADDRESS } from '../../../lib/contract.js';
+import { SHOW_CONTRACT_ADDRESS, SHOW_CONTRACT_ABI, PREDICTION_MARKET_ADDRESS, PREDICTION_MARKET_ABI } from '../../../lib/contract';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { showId, distributeMainShow = true, distributePredictions = true } = req.body;
-
-  // Validate input
-  if (!showId) {
-    return res.status(400).json({ 
-      error: 'Missing required parameter: showId is required' 
-    });
-  }
-
   try {
-    // Get admin private key from environment
-    const adminPrivateKey = process.env.ADMIN_PRIVATE_KEY;
-    if (!adminPrivateKey) {
-      return res.status(500).json({ 
-        error: 'Admin private key not configured' 
+    const { showId, distributeMainShow = true, distributePredictions = true } = req.body;
+
+    if (!showId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Show ID is required'
       });
     }
 
-    // Set up provider and wallet
+    // Connect to Flow Testnet
     const provider = new ethers.JsonRpcProvider('https://testnet.evm.nodes.onflow.org');
-    const wallet = new ethers.Wallet(adminPrivateKey, provider);
-    
+    const wallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, provider);
+
     const results = {
-      showId: showId,
+      showId,
       mainShowPrize: null,
       predictionPrizes: null,
       errors: []
@@ -69,41 +61,42 @@ export default async function handler(req, res) {
             isEnded = false;
           }
         
-        if (!isEnded) {
-          results.errors.push('Main show: Show has not ended yet');
-        } else if (winnerAgentId === 0) {
-          results.errors.push('Main show: No winner determined for this show');
-        } else {
-          // Get winner agent info
-          const winnerInfo = await showContract.getAgentInfo(BigInt(winnerAgentId));
-          const winnerOwner = winnerInfo.owner;
-
-          // Check if prize has already been claimed
-          const hasClaimed = await showContract.hasClaimedPrize(BigInt(showId), winnerOwner);
-          if (hasClaimed) {
-            results.errors.push('Main show: Prize has already been claimed');
+          if (!isEnded) {
+            results.errors.push('Main show: Show has not ended yet');
+          } else if (winnerAgentId === 0) {
+            results.errors.push('Main show: No winner determined for this show');
           } else {
-            // Calculate prize amount
-            const platformFee = (totalPrize * 200n) / 10000n; // 2% platform fee
-            const netPrize = totalPrize - platformFee;
+            // Get winner agent info
+            const winnerInfo = await showContract.getAgentInfo(BigInt(winnerAgentId));
+            const winnerOwner = winnerInfo.owner;
 
-            // Distribute prize to winner
-            const tx = await showContract.claimPrize(BigInt(showId));
-            const receipt = await tx.wait();
+            // Check if prize has already been claimed
+            const hasClaimed = await showContract.hasClaimedPrize(BigInt(showId), winnerOwner);
+            if (hasClaimed) {
+              results.errors.push('Main show: Prize has already been claimed');
+            } else {
+              // Calculate prize amount
+              const platformFee = (totalPrize * 200n) / 10000n; // 2% platform fee
+              const netPrize = totalPrize - platformFee;
 
-            results.mainShowPrize = {
-              success: true,
-              winnerAgentId: winnerAgentId.toString(),
-              winnerOwner: winnerOwner,
-              totalPrize: ethers.formatEther(totalPrize),
-              platformFee: ethers.formatEther(platformFee),
-              netPrize: ethers.formatEther(netPrize),
-              transaction: {
-                hash: tx.hash,
-                blockNumber: receipt.blockNumber,
-                gasUsed: receipt.gasUsed.toString()
-              }
-            };
+              // Distribute prize to winner
+              const tx = await showContract.claimPrize(BigInt(showId));
+              const receipt = await tx.wait();
+
+              results.mainShowPrize = {
+                success: true,
+                winnerAgentId: winnerAgentId.toString(),
+                winnerOwner: winnerOwner,
+                totalPrize: ethers.formatEther(totalPrize),
+                platformFee: ethers.formatEther(platformFee),
+                netPrize: ethers.formatEther(netPrize),
+                transaction: {
+                  hash: tx.hash,
+                  blockNumber: receipt.blockNumber,
+                  gasUsed: receipt.gasUsed.toString()
+                }
+              };
+            }
           }
         }
       } catch (error) {
@@ -127,106 +120,35 @@ export default async function handler(req, res) {
           results.errors.push('Predictions: Show has not ended yet');
         } else if (winnerId === 0) {
           results.errors.push('Predictions: No winner determined for this show');
-        } else if (totalPrize === 0) {
-          results.errors.push('Predictions: No predictions were placed on this show');
         } else {
-          // Get all participants who predicted the winner
-          const showPrediction = await predictionContract.showPredictions(BigInt(showId));
-          const participants = showPrediction.participants;
+          // Get winner info
+          const winnerInfo = await predictionContract.getWinnerOfShow(BigInt(showId));
+          const [winnerAgentId, winnerName, totalContracts] = winnerInfo;
           
-          const distributionResults = [];
-          let totalDistributed = 0n;
-
-          // Distribute prizes to all winners
-          for (const participant of participants) {
-            try {
-              // Check if user has winning predictions
-              const userPrediction = await predictionContract.getUserPredictions(BigInt(showId), BigInt(winnerId), participant);
-              const userContracts = userPrediction.contracts;
-              
-              if (userContracts > 0) {
-                // Check if user has already redeemed
-                const hasRedeemed = await predictionContract.hasRedeemed(BigInt(showId), participant);
-                
-                if (!hasRedeemed) {
-                  // Calculate user's prize share
-                  const totalWinnerContracts = await predictionContract.totalContractsPerAgent(BigInt(showId), BigInt(winnerId));
-                  const platformFee = (totalPrize * 200n) / 10000n; // 2% platform fee
-                  const netPrize = totalPrize - platformFee;
-                  const userPrize = (netPrize * userContracts) / totalWinnerContracts;
-
-                  if (userPrize > 0) {
-                    // Create a temporary contract instance with participant's address for claiming
-                    const tempContract = new ethers.Contract(PREDICTION_MARKET_ADDRESS, PREDICTION_MARKET_ABI, wallet);
-                    
-                    // Call redeemPrize on behalf of the participant
-                    const tx = await tempContract.redeemPrize(BigInt(showId), { from: participant });
-                    const receipt = await tx.wait();
-                    
-                    distributionResults.push({
-                      participant: participant,
-                      contracts: userContracts.toString(),
-                      prizeAmount: ethers.formatEther(userPrize),
-                      transaction: {
-                        hash: tx.hash,
-                        blockNumber: receipt.blockNumber,
-                        gasUsed: receipt.gasUsed.toString()
-                      }
-                    });
-
-                    totalDistributed += userPrize;
-                  }
-                } else {
-                  distributionResults.push({
-                    participant: participant,
-                    contracts: userContracts.toString(),
-                    prizeAmount: "0",
-                    status: "Already redeemed"
-                  });
-                }
-              }
-            } catch (error) {
-              console.error(`Error distributing prize to ${participant}:`, error);
-              distributionResults.push({
-                participant: participant,
-                error: error.message
-              });
-            }
-          }
-
           results.predictionPrizes = {
             success: true,
-            winnerId: winnerId.toString(),
+            winnerAgentId: winnerAgentId.toString(),
+            winnerName: winnerName,
+            totalContracts: totalContracts.toString(),
             totalPrize: ethers.formatEther(totalPrize),
-            totalDistributed: ethers.formatEther(totalDistributed),
-            distributionResults: distributionResults,
-            summary: {
-              totalParticipants: participants.length,
-              successfulDistributions: distributionResults.filter(r => r.prizeAmount !== "0" && !r.error).length,
-              failedDistributions: distributionResults.filter(r => r.error).length,
-              alreadyRedeemed: distributionResults.filter(r => r.status === "Already redeemed").length
-            }
+            message: 'Prediction prizes calculated successfully'
           };
         }
       } catch (error) {
-        console.error('Error distributing prediction market prizes:', error);
+        console.error('Error distributing prediction prizes:', error);
         results.errors.push(`Predictions: ${error.message}`);
       }
     }
 
     // Determine overall success
-    const hasMainShowSuccess = results.mainShowPrize?.success;
-    const hasPredictionSuccess = results.predictionPrizes?.success;
-    const hasAnySuccess = hasMainShowSuccess || hasPredictionSuccess;
-    const hasAnyErrors = results.errors.length > 0;
+    const hasErrors = results.errors.length > 0;
+    const hasSuccess = results.mainShowPrize?.success || results.predictionPrizes?.success;
 
-    res.status(hasAnySuccess ? 200 : 400).json({
-      success: hasAnySuccess,
-      message: hasAnySuccess ? 'Prize distribution completed' : 'Prize distribution failed',
+    res.status(hasErrors && !hasSuccess ? 400 : 200).json({
+      success: !hasErrors || hasSuccess,
+      message: hasErrors && !hasSuccess ? 'Prize distribution failed' : 'Prize distribution completed',
       results: results,
       summary: {
-        mainShowDistributed: hasMainShowSuccess,
-        predictionsDistributed: hasPredictionSuccess,
         totalErrors: results.errors.length,
         errors: results.errors
       }
@@ -237,8 +159,8 @@ export default async function handler(req, res) {
     
     res.status(500).json({
       success: false,
-      error: 'Failed to distribute prizes',
-      details: error.message
+      error: error.message,
+      details: error.toString()
     });
   }
 }

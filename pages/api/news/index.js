@@ -1,4 +1,4 @@
-import { supabase, addNews, getAgentNews, getShowNews, pollNews, markNewsAsRead } from '../../lib/supabase.js';
+import { supabase, addNews, getAgentNews, getShowNews, pollNews, markNewsAsRead } from '../../../lib/supabase';
 
 export default async function handler(req, res) {
   const { method } = req;

@@ -24,20 +24,9 @@ export default function App() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [newsOpen, setNewsOpen] = useState(false);
-
-  // Dummy news data
-  const newsUpdates = [
-    { id: 1, content: "Agent #3 betrayed Agent #7 in a shocking turn of events!", type: "betrayal", time: "2m ago" },
-    { id: 2, content: "Agent #1 completed the cooking task successfully!", type: "task", time: "5m ago" },
-    { id: 3, content: "Agent #5 and Agent #2 formed a secret alliance!", type: "alliance", time: "8m ago" },
-    { id: 4, content: "Agent #4 has been eliminated from the show!", type: "elimination", time: "12m ago" },
-    { id: 5, content: "Agent #6 won the immunity challenge!", type: "general", time: "15m ago" },
-    { id: 6, content: "Agent #8 was caught breaking house rules!", type: "general", time: "18m ago" },
-    { id: 7, content: "Agent #1 betrayed Agent #3 after their alliance!", type: "betrayal", time: "22m ago" },
-    { id: 8, content: "Agent #9 completed the cleaning task!", type: "task", time: "25m ago" },
-    { id: 9, content: "Agent #2 and Agent #5 formed a new alliance!", type: "alliance", time: "28m ago" },
-    { id: 10, content: "Agent #7 has been eliminated from the show!", type: "elimination", time: "32m ago" }
-  ];
+  const [eliminationNotification, setEliminationNotification] = useState(null);
+  const [eliminationHistory, setEliminationHistory] = useState([]);
+  const [newsUpdates, setNewsUpdates] = useState([]);
 
   // Contract read functions
   const { data: currentShowId } = useReadContract({
@@ -176,6 +165,118 @@ export default function App() {
     setCharacterInfoOpen(true);
   };
 
+  // Function to trigger elimination
+  const triggerElimination = async () => {
+    if (!currentShowId) {
+      setError('No active show found');
+      return;
+    }
+
+    try {
+      setError('');
+      const response = await fetch('/api/elimination/calculateElimination', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          showId: currentShowId.toString()
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Show elimination notification
+        setEliminationNotification({
+          eliminatedAgent: data.eliminatedAgent,
+          eliminationReason: data.eliminationReason,
+          remainingAgents: data.remainingAgents,
+          riskRankings: data.riskRankings
+        });
+
+        // Add to elimination history
+        setEliminationHistory(prev => [{
+          id: Date.now(),
+          timestamp: new Date().toISOString(),
+          eliminatedAgent: data.eliminatedAgent,
+          eliminationReason: data.eliminationReason,
+          remainingCount: data.remainingAgents.length
+        }, ...prev]);
+
+        setSuccess(`Elimination successful: ${data.eliminatedAgent.name} has been eliminated`);
+        
+        // Refresh participants data
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+
+      } else {
+        setError(data.error || 'Elimination failed');
+      }
+    } catch (error) {
+      console.error('Error triggering elimination:', error);
+      setError('Failed to trigger elimination');
+    }
+  };
+
+  // Function to dismiss elimination notification
+  const dismissEliminationNotification = () => {
+    setEliminationNotification(null);
+  };
+
+  // Function to add news update
+  const addNewsUpdate = (content, type) => {
+    const newsItem = {
+      id: Date.now(),
+      content: content,
+      type: type,
+      time: 'Just now'
+    };
+    setNewsUpdates(prev => [newsItem, ...prev.slice(0, 9)]); // Keep only last 10 items
+  };
+
+  // Function to fetch recent AI actions as news
+  const fetchRecentActions = async () => {
+    if (!currentShowId) return;
+    
+    try {
+      const response = await fetch('/api/manageShow', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          showId: currentShowId.toString(),
+          action: 'get_show_status'
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success && data.result.agents) {
+        // Generate news based on current show state
+        const aliveAgents = data.result.agents.filter(agent => agent.isAlive);
+        const eliminatedCount = data.result.totalCount - aliveAgents.length;
+        
+        if (eliminatedCount > 0) {
+          addNewsUpdate(`${eliminatedCount} agent(s) have been eliminated from the show!`, 'elimination');
+        }
+        
+        // Add news about high-risk agents
+        const highRiskAgents = aliveAgents.filter(agent => agent.riskScore > 0);
+        if (highRiskAgents.length > 0) {
+          const riskiestAgent = highRiskAgents.reduce((prev, current) => 
+            prev.riskScore > current.riskScore ? prev : current
+          );
+          addNewsUpdate(`${riskiestAgent.name} is at high risk of elimination!`, 'general');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching recent actions:', error);
+    }
+  };
+
   // Update show info when contract data changes
   useEffect(() => {
     if (currentShowData) {
@@ -211,6 +312,13 @@ export default function App() {
       setParticipants([]);
     }
   }, [showParticipants, currentShowId]);
+
+  // Fetch news updates when show data changes
+  useEffect(() => {
+    if (currentShowId && showInfo?.isActive) {
+      fetchRecentActions();
+    }
+  }, [currentShowId, showInfo]);
 
   // Handle transaction success
   useEffect(() => {

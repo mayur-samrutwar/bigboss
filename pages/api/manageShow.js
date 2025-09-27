@@ -1,59 +1,148 @@
 import { ethers } from 'ethers';
 import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS } from '../../lib/contract.js';
 
-// Mock show data
-const mockShowData = {
-  showId: "1",
-  agents: [
-    {
-      agentId: "1",
-      name: "Rajesh",
-      isAlive: true,
-      traits: {
-        popularity: 75,
-        aggression: 40,
-        loyalty: 60,
-        resilience: 70,
-        charisma: 80,
-        suspicion: 20,
-        energy: 90
-      },
-      riskScore: -155
-    },
-    {
-      agentId: "2", 
-      name: "Priya",
-      isAlive: true,
-      traits: {
-        popularity: 60,
-        aggression: 70,
-        loyalty: 80,
-        resilience: 60,
-        charisma: 50,
-        suspicion: 30,
-        energy: 85
-      },
-      riskScore: -10
-    },
-    {
-      agentId: "3",
-      name: "Vikram", 
-      isAlive: true,
-      traits: {
-        popularity: 50,
-        aggression: 60,
-        loyalty: 50,
-        resilience: 80,
-        charisma: 60,
-        suspicion: 40,
-        energy: 75
-      },
-      riskScore: -30
+// Helper function to get real show data from contract
+async function getRealShowData(showId) {
+  try {
+    // Set up provider
+    const provider = new ethers.JsonRpcProvider('https://testnet.evm.nodes.onflow.org');
+    const contract = new ethers.Contract(SHOW_CONTRACT_ADDRESS, SHOW_CONTRACT_ABI, provider);
+
+    console.log(`Fetching real show data for show ${showId}...`);
+    
+    // Get show participants
+    const showParticipants = await contract.getShowParticipants(BigInt(showId));
+    const agentIds = showParticipants.agentIds;
+    
+    if (agentIds.length === 0) {
+      return {
+        success: false,
+        error: 'No agents participating in this show',
+        agents: [],
+        aliveCount: 0,
+        totalCount: 0
+      };
     }
-  ],
-  aliveCount: 3,
-  totalCount: 3
-};
+
+    // Get traits for all participating agents
+    const agentsData = [];
+    for (const agentId of agentIds) {
+      const agentInfo = await contract.getAgentInfo(agentId);
+      
+      if (!agentInfo.isAlive) continue; // Skip dead agents
+      
+      const traits = {
+        popularity: agentInfo.parameters[0] || 50,
+        aggression: agentInfo.parameters[1] || 30,
+        loyalty: agentInfo.parameters[2] || 60,
+        resilience: agentInfo.parameters[3] || 50,
+        charisma: agentInfo.parameters[4] || 40,
+        suspicion: agentInfo.parameters[5] || 20,
+        energy: agentInfo.parameters[6] || 80
+      };
+      
+      // Calculate risk score: (Suspicion + Aggression) - (Popularity + Charisma + Resilience)
+      const riskScore = (traits.suspicion + traits.aggression) - (traits.popularity + traits.charisma + traits.resilience);
+      
+      agentsData.push({
+        agentId: agentId.toString(),
+        name: agentInfo.name,
+        isAlive: agentInfo.isAlive,
+        traits: traits,
+        riskScore: riskScore
+      });
+    }
+
+    return {
+      success: true,
+      showId: showId,
+      agents: agentsData,
+      aliveCount: agentsData.length,
+      totalCount: agentIds.length
+    };
+
+  } catch (error) {
+    console.error('Error fetching real show data:', error);
+    return {
+      success: false,
+      error: error.message,
+      agents: [],
+      aliveCount: 0,
+      totalCount: 0
+    };
+  }
+}
+
+// Helper function to get AI decision using real data
+async function getRealAIDecision(showId) {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    
+    // Call the AI decision API with real contract data
+    const aiResponse = await fetch(`${baseUrl}/api/ai/getDecision`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        showId: showId,
+        context: 'general'
+      })
+    });
+
+    if (!aiResponse.ok) {
+      throw new Error(`AI service responded with status: ${aiResponse.status}`);
+    }
+
+    const aiData = await aiResponse.json();
+    
+    if (!aiData.success) {
+      throw new Error(aiData.error || 'AI decision failed');
+    }
+
+    return aiData;
+
+  } catch (error) {
+    console.error('Error getting AI decision:', error);
+    throw error;
+  }
+}
+
+// Helper function to execute AI action using real data
+async function executeRealAIAction(showId, aiDecision) {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    
+    // Call the execute action API
+    const executeResponse = await fetch(`${baseUrl}/api/executeAction`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: aiDecision.action,
+        parameters: aiDecision.parameters,
+        showId: showId
+      })
+    });
+
+    if (!executeResponse.ok) {
+      throw new Error(`Execute action responded with status: ${executeResponse.status}`);
+    }
+
+    const executeData = await executeResponse.json();
+    
+    if (!executeData.success) {
+      throw new Error(executeData.error || 'Action execution failed');
+    }
+
+    return executeData;
+
+  } catch (error) {
+    console.error('Error executing AI action:', error);
+    throw error;
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -72,88 +161,55 @@ export default async function handler(req, res) {
   try {
     console.log(`Managing show ${showId} with action: ${action}...`);
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     let result;
 
     switch (action) {
       case 'get_ai_decision':
-        // Mock AI decision
-        result = {
-          success: true,
-          aiDecision: {
-            action: 'argue',
-            parameters: ['1', '2'],
-            rawResponse: 'argue(1,2)'
-          },
-          context: {
-            showId: showId,
-            totalAgents: mockShowData.aliveCount,
-            agents: mockShowData.agents,
-            context: 'general',
-            timestamp: new Date().toISOString()
-          },
-          availableAgents: mockShowData.agents.map(agent => ({
-            agentId: agent.agentId,
-            name: agent.name,
-            riskScore: agent.riskScore
-          }))
-        };
+        // Get real AI decision - no fallback to mock data
+        result = await getRealAIDecision(showId);
         break;
 
       case 'execute_ai_action':
-        // Mock AI action execution
+        // Get AI decision first
+        const aiDecision = await getRealAIDecision(showId);
+        
+        // Execute the action
+        const executeResult = await executeRealAIAction(showId, aiDecision.aiDecision);
+        
         result = {
           success: true,
-          message: 'Mock AI action executed successfully',
-          action: 'argue',
-          parameters: ['1', '2'],
-          toolResult: {
-            success: true,
-            message: 'Mock argue action completed',
-            winner: '1',
-            loser: '2',
-            traitChanges: {
-              agent1: {
-                aggression: '+10',
-                suspicion: '+5',
-                popularity: '+5',
-                energy: '-10'
-              },
-              agent2: {
-                aggression: '+10',
-                suspicion: '+5',
-                popularity: '-15',
-                energy: '-10'
-              }
-            }
-          },
-          aiDecision: {
-            action: 'argue',
-            parameters: ['1', '2'],
-            rawResponse: 'argue(1,2)'
-          }
+          message: 'AI action executed successfully',
+          action: aiDecision.aiDecision.action,
+          parameters: aiDecision.aiDecision.parameters,
+          toolResult: executeResult,
+          aiDecision: aiDecision.aiDecision
         };
         break;
 
       case 'check_elimination':
-        // Mock elimination check
-        result = {
-          success: false,
-          message: 'Not time for elimination yet (mock mode)',
-          mockMode: true
-        };
+        // Get real show data
+        const eliminationShowData = await getRealShowData(showId);
+        
+        if (!eliminationShowData.success) {
+          result = {
+            success: false,
+            message: eliminationShowData.error
+          };
+        } else {
+          // Check if elimination is needed (simplified logic)
+          const shouldEliminate = eliminationShowData.aliveCount > 2; // Eliminate if more than 2 players
+          
+          result = {
+            success: shouldEliminate,
+            message: shouldEliminate ? 'Elimination needed' : 'Not time for elimination yet',
+            showData: eliminationShowData
+          };
+        }
         break;
 
       case 'get_show_status':
-        // Return mock show status
-        result = {
-          success: true,
-          showId: showId,
-          agents: mockShowData.agents,
-          aliveCount: mockShowData.aliveCount,
-          totalCount: mockShowData.totalCount,
-          mockMode: true
-        };
+        // Get real show data
+        result = await getRealShowData(showId);
         break;
 
       default:
@@ -167,9 +223,7 @@ export default async function handler(req, res) {
       success: true,
       action: action,
       showId: showId,
-      result: result,
-      mockMode: true,
-      note: 'Using mock data - no agents deployed on contract. Run "node registerTestAgents.js" to deploy real agents.'
+      result: result
     });
 
   } catch (error) {
@@ -179,7 +233,7 @@ export default async function handler(req, res) {
       success: false,
       error: 'Failed to manage show',
       details: error.message,
-      suggestion: 'Run "node registerTestAgents.js" to deploy test agents'
+      suggestion: 'Check if show exists and has participants'
     });
   }
 }

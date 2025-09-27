@@ -1,8 +1,9 @@
 import WalletConnect from '../components/WalletConnect';
 import Character from '../components/Character';
 import { useState, useEffect } from 'react';
-import { useAccount, useReadContract } from 'wagmi';
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS } from '../abi/ShowContract';
+import { PREDICTION_MARKET_ABI, PREDICTION_MARKET_ADDRESS } from '../abi/PredictionMarket';
 
 export default function App() {
   const { address, isConnected } = useAccount();
@@ -19,6 +20,8 @@ export default function App() {
   const [characterInfoOpen, setCharacterInfoOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(null);
   const [participants, setParticipants] = useState([]);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   // Contract read functions
   const { data: currentShowId } = useReadContract({
@@ -40,23 +43,98 @@ export default function App() {
     args: currentShowId ? [currentShowId] : undefined,
   });
 
+  const { data: agentVoteCounts } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'getAgentVoteCounts',
+    args: currentShowId && participants.length > 0 ? [currentShowId, participants.map(p => BigInt(p.agentId))] : undefined,
+  });
 
-  const handleBuy = () => {
+  // PredictionMarket contract reads
+  const { data: predictionMarketShowInfo } = useReadContract({
+    address: PREDICTION_MARKET_ADDRESS,
+    abi: PREDICTION_MARKET_ABI,
+    functionName: 'getCurrentShowInfo',
+  });
+
+  const { data: showPredictionInfo } = useReadContract({
+    address: PREDICTION_MARKET_ADDRESS,
+    abi: PREDICTION_MARKET_ABI,
+    functionName: 'getShowPredictionInfo',
+    args: currentShowId ? [currentShowId] : undefined,
+  });
+
+  // Contract write functions
+  const { writeContract, data: hash, isPending, isConfirming, error: writeError } = useWriteContract();
+  const { isLoading: isConfirmed } = useWaitForTransactionReceipt({
+    hash,
+  });
+
+
+  const handleBuy = async () => {
     if (!selectedWinner) {
-      alert('Please select a winner first!');
+      setError('Please select a winner first!');
       return;
     }
-    console.log(`Buying ${contracts} contracts for ${selectedWinner}`);
-    alert(`Successfully bought ${contracts} contracts for ${selectedWinner}!`);
+
+    if (!isConnected) {
+      setError('Please connect your wallet to make predictions!');
+      return;
+    }
+
+    if (!currentShowId || !showInfo?.isActive) {
+      setError('No active show to predict on!');
+      return;
+    }
+
+    try {
+      setError('');
+      // Prediction fee is 0.01 ETH per contract
+      const predictionFee = (0.01 * contracts).toString();
+      
+      writeContract({
+        address: PREDICTION_MARKET_ADDRESS,
+        abi: PREDICTION_MARKET_ABI,
+        functionName: 'placePrediction',
+        args: [currentShowId, BigInt(selectedWinner), BigInt(contracts)],
+        value: predictionFee,
+      });
+    } catch (err) {
+      setError('Failed to place prediction: ' + err.message);
+    }
   };
 
-  const handleVote = () => {
+  const handleVote = async () => {
     if (!selectedVote) {
-      alert('Please select a contestant to vote for!');
+      setError('Please select a contestant to vote for!');
       return;
     }
-    console.log(`Voting for ${selectedVote}`);
-    alert(`Successfully voted for ${selectedVote}!`);
+
+    if (!isConnected) {
+      setError('Please connect your wallet to vote!');
+      return;
+    }
+
+    if (!currentShowId || !showInfo?.isActive) {
+      setError('No active show to vote in!');
+      return;
+    }
+
+    try {
+      setError('');
+      // Vote fee is 0.01 ETH
+      const voteFee = '0.01';
+      
+      writeContract({
+        address: SHOW_CONTRACT_ADDRESS,
+        abi: SHOW_CONTRACT_ABI,
+        functionName: 'voteForAgent',
+        args: [currentShowId, BigInt(selectedVote)],
+        value: voteFee,
+      });
+    } catch (err) {
+      setError('Failed to cast vote: ' + err.message);
+    }
   };
 
   const handleCharacterClick = (characterData) => {
@@ -90,6 +168,24 @@ export default function App() {
       })));
     }
   }, [showParticipants]);
+
+  // Handle transaction success
+  useEffect(() => {
+    if (isConfirmed) {
+      setSuccess('Transaction confirmed successfully!');
+      setError('');
+      // Clear selected vote and prediction after successful transaction
+      setSelectedVote('');
+      setSelectedWinner('');
+    }
+  }, [isConfirmed]);
+
+  // Handle write errors
+  useEffect(() => {
+    if (writeError) {
+      setError('Transaction failed: ' + writeError.message);
+    }
+  }, [writeError]);
   
   // Calculate max scroll based on image dimensions (9270 × 3700)
   // Image aspect ratio: 9270/3700 = 2.5
@@ -168,6 +264,18 @@ export default function App() {
       <div className="absolute top-4 right-4 z-10">
         <WalletConnect />
       </div>
+
+      {/* Success/Error Messages */}
+      {success && (
+        <div className="absolute top-20 right-4 z-10 bg-green-900/20 border border-green-500 text-green-400 font-mono p-4 rounded max-w-sm">
+          SUCCESS: {success}
+        </div>
+      )}
+      {error && (
+        <div className="absolute top-20 right-4 z-10 bg-red-900/20 border border-red-500 text-red-400 font-mono p-4 rounded max-w-sm">
+          ERROR: {error}
+        </div>
+      )}
 
       {/* Show Status Display - Top Left */}
       {showInfo && (
@@ -253,23 +361,49 @@ export default function App() {
             
             {/* Winner Selection */}
             <div className="space-y-2 mb-4">
-              {['Contestant A', 'Contestant B', 'Contestant C', 'Contestant D'].map((contestant) => (
-                <label key={contestant} className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedWinner === contestant}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedWinner(contestant);
-                      } else {
-                        setSelectedWinner('');
-                      }
-                    }}
-                    className="text-green-500"
-                  />
-                  <span className="text-green-400 font-mono text-sm">{contestant}</span>
-                </label>
-              ))}
+              {participants.length > 0 ? (
+                participants.map((participant, index) => {
+                  const voteCount = agentVoteCounts ? Number(agentVoteCounts[index]) : 0;
+                  return (
+                    <label key={participant.agentId} className="flex items-center justify-between cursor-pointer p-2 rounded border border-green-500/30 hover:border-green-400">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedWinner === participant.agentId}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedWinner(participant.agentId);
+                            } else {
+                              setSelectedWinner('');
+                            }
+                          }}
+                          className="text-green-500"
+                        />
+                        <span className="text-green-400 font-mono text-sm">
+                          Agent #{participant.agentId}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-green-300 font-mono text-xs">
+                          {participant.address.slice(0, 6)}...{participant.address.slice(-4)}
+                        </div>
+                        <div className="text-green-400 font-mono text-xs">
+                          {voteCount} vote{voteCount !== 1 ? 's' : ''}
+                        </div>
+                        {showPredictionInfo && (
+                          <div className="text-yellow-400 font-mono text-xs">
+                            {showPredictionInfo.totalPrize ? `${(Number(showPredictionInfo.totalPrize) / 1e18).toFixed(2)} ETH pool` : 'No predictions yet'}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })
+              ) : (
+                <div className="text-gray-400 font-mono text-sm text-center py-4">
+                  No participants in current show
+                </div>
+              )}
             </div>
 
             {/* Contracts Input */}
@@ -288,14 +422,23 @@ export default function App() {
             {/* Buy Button */}
             <button
               onClick={handleBuy}
-              className="w-full bg-green-500 hover:bg-green-400 text-black font-bold py-3 px-4 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
+              disabled={!selectedWinner || !isConnected || !showInfo?.isActive || isPending || isConfirming}
+              className="w-full bg-green-500 hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold py-3 px-4 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
               style={{
                 fontFamily: 'monospace',
                 textShadow: '0 0 10px #00ff00'
               }}
             >
-              BUY CONTRACTS
+              {isPending ? 'PLACING PREDICTION...' : isConfirming ? 'CONFIRMING...' : `BUY ${contracts} CONTRACT${contracts > 1 ? 'S' : ''} (${(0.01 * contracts).toFixed(2)} ETH)`}
             </button>
+            
+            {/* Prediction Info */}
+            <div className="mt-2 text-xs text-green-300 font-mono text-center">
+              {!isConnected && 'Connect wallet to predict'}
+              {isConnected && !showInfo?.isActive && 'No active show'}
+              {isConnected && showInfo?.isActive && participants.length === 0 && 'No participants yet'}
+              {isConnected && showInfo?.isActive && participants.length > 0 && !selectedWinner && 'Select an agent to predict'}
+            </div>
           </div>
         </div>
       </div>
@@ -320,35 +463,57 @@ export default function App() {
             
             {/* Contestant Selection */}
             <div className="space-y-2 mb-4">
-              {['Contestant A', 'Contestant B'].map((contestant) => (
-                <label key={contestant} className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="vote"
-                    checked={selectedVote === contestant}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedVote(contestant);
-                      }
-                    }}
-                    className="text-blue-500"
-                  />
-                  <span className="text-blue-400 font-mono text-sm">{contestant}</span>
-                </label>
-              ))}
+              {participants.length > 0 ? (
+                participants.map((participant) => (
+                  <label key={participant.agentId} className="flex items-center justify-between cursor-pointer p-2 rounded border border-blue-500/30 hover:border-blue-400">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="vote"
+                        checked={selectedVote === participant.agentId}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedVote(participant.agentId);
+                          }
+                        }}
+                        className="text-blue-500"
+                      />
+                      <span className="text-blue-400 font-mono text-sm">
+                        Agent #{participant.agentId}
+                      </span>
+                    </div>
+                    <span className="text-blue-300 font-mono text-xs">
+                      {participant.address.slice(0, 6)}...{participant.address.slice(-4)}
+                    </span>
+                  </label>
+                ))
+              ) : (
+                <div className="text-gray-400 font-mono text-sm text-center py-4">
+                  No participants in current show
+                </div>
+              )}
             </div>
 
             {/* Vote Button */}
             <button
               onClick={handleVote}
-              className="w-full bg-blue-500 hover:bg-blue-400 text-white font-bold py-3 px-4 rounded-lg border-2 border-blue-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50"
+              disabled={!selectedVote || !isConnected || !showInfo?.isActive || isPending || isConfirming}
+              className="w-full bg-blue-500 hover:bg-blue-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg border-2 border-blue-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50"
               style={{
                 fontFamily: 'monospace',
                 textShadow: '0 0 10px #0066ff'
               }}
             >
-              CAST VOTE
+              {isPending ? 'CASTING VOTE...' : isConfirming ? 'CONFIRMING...' : `CAST VOTE (0.01 ETH)`}
             </button>
+            
+            {/* Vote Info */}
+            <div className="mt-2 text-xs text-blue-300 font-mono text-center">
+              {!isConnected && 'Connect wallet to vote'}
+              {isConnected && !showInfo?.isActive && 'No active show'}
+              {isConnected && showInfo?.isActive && participants.length === 0 && 'No participants yet'}
+              {isConnected && showInfo?.isActive && participants.length > 0 && !selectedVote && 'Select an agent to vote'}
+            </div>
           </div>
         </div>
       </div>

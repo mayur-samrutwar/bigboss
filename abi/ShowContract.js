@@ -608,19 +608,67 @@ export const SHOW_CONTRACT_ABI = [
     "stateMutability": "view",
     "type": "function"
   },
-  {
-    "inputs": [],
-    "name": "getTimeUntilShowEnds",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
+    {
+      "inputs": [],
+      "name": "getTimeUntilShowEnds",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_showId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_agentId",
+          "type": "uint256"
+        }
+      ],
+      "name": "getAgentVoteCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_showId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "_agentIds",
+          "type": "uint256[]"
+        }
+      ],
+      "name": "getAgentVoteCounts",
+      "outputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
   {
     "inputs": [],
     "name": "emergencyWithdraw",

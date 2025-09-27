@@ -5,204 +5,185 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
+// Interface for ShowContract
+interface IShowContract {
+    function getCurrentShow() external view returns (
+        uint256 showId,
+        string memory name,
+        uint256 startTime,
+        uint256 endTime,
+        bool isActive,
+        uint256 prizePool,
+        uint256 participantCount
+    );
+    function getShowParticipants(uint256 _showId) external view returns (uint256[] memory);
+    function getAgentInfo(uint256 _agentId) external view returns (
+        string memory name,
+        uint256[7] memory traits,
+        bool isAlive,
+        uint256 showId
+    );
+    function getAgentVoteCount(uint256 _showId, uint256 _agentId) external view returns (uint256);
+}
+
 /**
  * @title PredictionMarket
- * @dev A simple prediction market where users bet on show winners
- * Each vote costs 1 ETH (or 1 FLOW equivalent)
- * All lost money goes to winners, equally divided
+ * @dev A prediction market integrated with ShowContract
+ * Users can predict winners for ongoing shows from the main contract
+ * Each prediction costs 0.01 ETH per contract
+ * All lost money goes to winners, proportionally divided
  */
 contract PredictionMarket is ReentrancyGuard, Ownable, Pausable {
     
     // Events
-    event ShowCreated(uint256 indexed showId, string showName, uint256 endTime);
-    event BetPlaced(uint256 indexed showId, address indexed user, uint256 votes, uint256 totalVotes);
+    event PredictionPlaced(uint256 indexed showId, address indexed user, uint256 agentId, uint256 contracts);
     event ShowEnded(uint256 indexed showId, uint256 winnerId, uint256 totalPrize);
     event PrizeRedeemed(uint256 indexed showId, address indexed user, uint256 amount);
-    event ShowCancelled(uint256 indexed showId, uint256 refundAmount);
     
     // Constants
-    uint256 public constant VOTE_COST = 1 ether; // 1 ETH per vote (or 1 FLOW equivalent)
-    uint256 public constant MIN_VOTES = 1;
-    uint256 public constant MAX_VOTES = 1000; // Prevent excessive gas usage
-    uint256 public constant MIN_SHOW_DURATION = 1 hours;
-    uint256 public constant MAX_SHOW_DURATION = 365 days;
+    uint256 public constant CONTRACT_COST = 0.01 ether; // 0.01 ETH per prediction contract
+    uint256 public constant MIN_CONTRACTS = 1;
+    uint256 public constant MAX_CONTRACTS = 100; // Prevent excessive gas usage
+    uint256 public constant FEE_PERCENTAGE = 2; // 2% platform fee
     
-    // Structs
-    struct Show {
-        string name;
-        uint256 endTime;
-        bool isActive;
-        bool isEnded;
-        uint256 winnerId;
-        uint256 totalPrize;
-        mapping(uint256 => uint256) votesPerContestant; // contestantId => total votes
-        mapping(address => mapping(uint256 => uint256)) userVotes; // user => contestantId => votes
-        mapping(address => bool) hasRedeemed;
-        address[] participants;
+    // State variables
+    IShowContract public showContract;
+    uint256 public totalFees;
+    
+    // Structs for predictions
+    struct Prediction {
+        uint256 contracts; // Number of contracts bought
+        bool hasRedeemed;
     }
     
-    struct Contestant {
-        string name;
-        bool exists;
+    struct ShowPrediction {
+        mapping(uint256 => uint256) totalContractsPerAgent; // agentId => total contracts
+        mapping(address => mapping(uint256 => Prediction)) userPredictions; // user => agentId => Prediction
+        mapping(address => bool) hasRedeemed;
+        address[] participants;
+        uint256 totalPrize;
+        uint256 winnerId;
+        bool isEnded;
     }
     
     // State variables
-    mapping(uint256 => Show) public shows;
-    mapping(uint256 => mapping(uint256 => Contestant)) public contestants; // showId => contestantId => Contestant
-    mapping(uint256 => uint256) public contestantCount; // showId => count
-    uint256 public showCounter;
-    uint256 public totalFees;
-    uint256 public feePercentage = 2; // 2% platform fee
+    mapping(uint256 => ShowPrediction) public showPredictions; // showId => ShowPrediction
     
     // Modifiers
-    modifier showExists(uint256 _showId) {
-        require(_showId > 0 && _showId <= showCounter, "Show does not exist");
-        _;
-    }
-    
     modifier showActive(uint256 _showId) {
-        require(shows[_showId].isActive && !shows[_showId].isEnded, "Show is not active");
+        (,,,uint256 endTime, bool isActive,,) = showContract.getCurrentShow();
+        require(isActive && block.timestamp < endTime, "Show is not active");
         _;
     }
     
     modifier showEnded(uint256 _showId) {
-        require(shows[_showId].isEnded, "Show has not ended yet");
+        require(showPredictions[_showId].isEnded, "Show has not ended yet");
         _;
     }
     
-    modifier validContestant(uint256 _showId, uint256 _contestantId) {
-        require(contestants[_showId][_contestantId].exists, "Contestant does not exist");
-        _;
-    }
-    
-    modifier validVoteAmount(uint256 _votes) {
-        require(_votes >= MIN_VOTES && _votes <= MAX_VOTES, "Invalid vote amount");
-        _;
-    }
-    
-    constructor() Ownable(msg.sender) {}
-    
-    /**
-     * @dev Create a new show with contestants
-     * @param _showName Name of the show
-     * @param _contestantNames Array of contestant names
-     * @param _duration Duration of the show in seconds
-     */
-    function createShow(
-        string memory _showName,
-        string[] memory _contestantNames,
-        uint256 _duration
-    ) external onlyOwner whenNotPaused {
-        require(bytes(_showName).length > 0, "Show name cannot be empty");
-        require(_contestantNames.length >= 2, "At least 2 contestants required");
-        require(_contestantNames.length <= 50, "Too many contestants");
-        require(_duration >= MIN_SHOW_DURATION && _duration <= MAX_SHOW_DURATION, "Invalid duration");
-        
-        showCounter++;
-        uint256 showId = showCounter;
-        
-        shows[showId].name = _showName;
-        shows[showId].endTime = block.timestamp + _duration;
-        shows[showId].isActive = true;
-        shows[showId].isEnded = false;
-        
-        // Add contestants
-        for (uint256 i = 0; i < _contestantNames.length; i++) {
-            require(bytes(_contestantNames[i]).length > 0, "Contestant name cannot be empty");
-            contestants[showId][i + 1] = Contestant({
-                name: _contestantNames[i],
-                exists: true
-            });
+    modifier validAgent(uint256 _showId, uint256 _agentId) {
+        uint256[] memory participants = showContract.getShowParticipants(_showId);
+        bool agentExists = false;
+        for (uint256 i = 0; i < participants.length; i++) {
+            if (participants[i] == _agentId) {
+                agentExists = true;
+                break;
+            }
         }
-        contestantCount[showId] = _contestantNames.length;
-        
-        emit ShowCreated(showId, _showName, shows[showId].endTime);
+        require(agentExists, "Agent does not exist in this show");
+        _;
+    }
+    
+    modifier validContractAmount(uint256 _contracts) {
+        require(_contracts >= MIN_CONTRACTS && _contracts <= MAX_CONTRACTS, "Invalid contract amount");
+        _;
+    }
+    
+    constructor(address _showContract) Ownable(msg.sender) {
+        showContract = IShowContract(_showContract);
     }
     
     /**
-     * @dev Place a bet on a show contestant
+     * @dev Place a prediction on a show agent
      * @param _showId ID of the show
-     * @param _contestantId ID of the contestant to bet on
-     * @param _votes Number of votes (each costs 1 ETH)
+     * @param _agentId ID of the agent to predict
+     * @param _contracts Number of contracts to buy
      */
-    function bet(
+    function placePrediction(
         uint256 _showId,
-        uint256 _contestantId,
-        uint256 _votes
-    ) external payable nonReentrant whenNotPaused showExists(_showId) showActive(_showId) validContestant(_showId, _contestantId) validVoteAmount(_votes) {
-        require(block.timestamp < shows[_showId].endTime, "Show has ended");
-        require(msg.value == _votes * VOTE_COST, "Incorrect payment amount");
+        uint256 _agentId,
+        uint256 _contracts
+    ) external payable nonReentrant whenNotPaused showActive(_showId) validAgent(_showId, _agentId) validContractAmount(_contracts) {
+        require(msg.value == _contracts * CONTRACT_COST, "Incorrect payment amount");
         
-        // Update show state
-        shows[_showId].votesPerContestant[_contestantId] += _votes;
-        shows[_showId].userVotes[msg.sender][_contestantId] += _votes;
-        shows[_showId].totalPrize += msg.value;
+        // Update prediction state
+        showPredictions[_showId].totalContractsPerAgent[_agentId] += _contracts;
+        showPredictions[_showId].userPredictions[msg.sender][_agentId].contracts += _contracts;
+        showPredictions[_showId].totalPrize += msg.value;
         
         // Add participant if not already added
-        if (shows[_showId].userVotes[msg.sender][_contestantId] == _votes) {
-            shows[_showId].participants.push(msg.sender);
+        if (showPredictions[_showId].userPredictions[msg.sender][_agentId].contracts == _contracts) {
+            showPredictions[_showId].participants.push(msg.sender);
         }
         
-        emit BetPlaced(_showId, msg.sender, _votes, shows[_showId].votesPerContestant[_contestantId]);
+        emit PredictionPlaced(_showId, msg.sender, _agentId, _contracts);
     }
     
     /**
-     * @dev End a show and determine the winner
+     * @dev End a show and determine the winner (called by owner)
      * @param _showId ID of the show
-     * @param _winnerId ID of the winning contestant
+     * @param _winnerId ID of the winning agent
      */
-    function endShow(uint256 _showId, uint256 _winnerId) external onlyOwner showExists(_showId) showActive(_showId) validContestant(_showId, _winnerId) {
-        require(block.timestamp >= shows[_showId].endTime, "Show has not ended yet");
-        require(shows[_showId].totalPrize > 0, "No bets placed on this show");
+    function endShow(uint256 _showId, uint256 _winnerId) external onlyOwner showActive(_showId) validAgent(_showId, _winnerId) {
+        require(showPredictions[_showId].totalPrize > 0, "No predictions placed on this show");
         
-        shows[_showId].isActive = false;
-        shows[_showId].isEnded = true;
-        shows[_showId].winnerId = _winnerId;
+        showPredictions[_showId].isEnded = true;
+        showPredictions[_showId].winnerId = _winnerId;
         
         // Calculate platform fee
-        uint256 platformFee = (shows[_showId].totalPrize * feePercentage) / 100;
+        uint256 platformFee = (showPredictions[_showId].totalPrize * FEE_PERCENTAGE) / 100;
         totalFees += platformFee;
         
-        emit ShowEnded(_showId, _winnerId, shows[_showId].totalPrize);
+        emit ShowEnded(_showId, _winnerId, showPredictions[_showId].totalPrize);
     }
     
     /**
      * @dev Get the winner of a show
      * @param _showId ID of the show
-     * @return winnerId ID of the winning contestant
-     * @return winnerName Name of the winning contestant
-     * @return totalVotes Total votes for the winner
+     * @return winnerId ID of the winning agent
+     * @return winnerName Name of the winning agent
+     * @return totalContracts Total contracts for the winner
      */
-    function getWinnerOfShow(uint256 _showId) external view showExists(_showId) showEnded(_showId) returns (
+    function getWinnerOfShow(uint256 _showId) external view showEnded(_showId) returns (
         uint256 winnerId,
         string memory winnerName,
-        uint256 totalVotes
+        uint256 totalContracts
     ) {
-        winnerId = shows[_showId].winnerId;
-        winnerName = contestants[_showId][winnerId].name;
-        totalVotes = shows[_showId].votesPerContestant[winnerId];
+        winnerId = showPredictions[_showId].winnerId;
+        (winnerName,,,) = showContract.getAgentInfo(winnerId);
+        totalContracts = showPredictions[_showId].totalContractsPerAgent[winnerId];
     }
     
     /**
-     * @dev Redeem prize for a winning bet
+     * @dev Redeem prize for a winning prediction
      * @param _showId ID of the show
      */
-    function redeemPrize(uint256 _showId) external nonReentrant showExists(_showId) showEnded(_showId) {
-        require(!shows[_showId].hasRedeemed[msg.sender], "Already redeemed");
-        require(shows[_showId].userVotes[msg.sender][shows[_showId].winnerId] > 0, "No winning votes");
+    function redeemPrize(uint256 _showId) external nonReentrant showEnded(_showId) {
+        require(!showPredictions[_showId].hasRedeemed[msg.sender], "Already redeemed");
+        require(showPredictions[_showId].userPredictions[msg.sender][showPredictions[_showId].winnerId].contracts > 0, "No winning predictions");
         
-        uint256 userVotes = shows[_showId].userVotes[msg.sender][shows[_showId].winnerId];
-        uint256 totalWinnerVotes = shows[_showId].votesPerContestant[shows[_showId].winnerId];
-        uint256 platformFee = (shows[_showId].totalPrize * feePercentage) / 100;
-        uint256 netPrize = shows[_showId].totalPrize - platformFee;
+        uint256 userContracts = showPredictions[_showId].userPredictions[msg.sender][showPredictions[_showId].winnerId].contracts;
+        uint256 totalWinnerContracts = showPredictions[_showId].totalContractsPerAgent[showPredictions[_showId].winnerId];
+        uint256 platformFee = (showPredictions[_showId].totalPrize * FEE_PERCENTAGE) / 100;
+        uint256 netPrize = showPredictions[_showId].totalPrize - platformFee;
         
         // Calculate user's share of the prize
-        uint256 userPrize = (netPrize * userVotes) / totalWinnerVotes;
+        uint256 userPrize = (netPrize * userContracts) / totalWinnerContracts;
         
         require(userPrize > 0, "No prize to redeem");
         require(address(this).balance >= userPrize, "Insufficient contract balance");
         
-        shows[_showId].hasRedeemed[msg.sender] = true;
+        showPredictions[_showId].hasRedeemed[msg.sender] = true;
         
         (bool success, ) = payable(msg.sender).call{value: userPrize}("");
         require(success, "Transfer failed");
@@ -211,82 +192,75 @@ contract PredictionMarket is ReentrancyGuard, Ownable, Pausable {
     }
     
     /**
-     * @dev Cancel a show and refund all bets
+     * @dev Get show prediction information
      * @param _showId ID of the show
      */
-    function cancelShow(uint256 _showId) external onlyOwner showExists(_showId) showActive(_showId) {
-        require(block.timestamp < shows[_showId].endTime, "Cannot cancel ended show");
-        
-        shows[_showId].isActive = false;
-        shows[_showId].isEnded = true;
-        
-        // Refund all participants
-        address[] memory participants = shows[_showId].participants;
-        for (uint256 i = 0; i < participants.length; i++) {
-            address participant = participants[i];
-            uint256 totalRefund = 0;
-            
-            // Calculate total refund for this participant
-            for (uint256 j = 1; j <= contestantCount[_showId]; j++) {
-                uint256 userVotes = shows[_showId].userVotes[participant][j];
-                totalRefund += userVotes * VOTE_COST;
-            }
-            
-            if (totalRefund > 0) {
-                (bool success, ) = payable(participant).call{value: totalRefund}("");
-                require(success, "Refund failed");
-            }
-        }
-        
-        emit ShowCancelled(_showId, shows[_showId].totalPrize);
-    }
-    
-    /**
-     * @dev Get show information
-     * @param _showId ID of the show
-     */
-    function getShowInfo(uint256 _showId) external view showExists(_showId) returns (
-        string memory name,
-        uint256 endTime,
-        bool isActive,
-        bool isEnded,
+    function getShowPredictionInfo(uint256 _showId) external view returns (
         uint256 totalPrize,
-        uint256 participantCount
+        uint256 participantCount,
+        bool isEnded,
+        uint256 winnerId
     ) {
-        Show storage show = shows[_showId];
         return (
-            show.name,
-            show.endTime,
-            show.isActive,
-            show.isEnded,
-            show.totalPrize,
-            show.participants.length
+            showPredictions[_showId].totalPrize,
+            showPredictions[_showId].participants.length,
+            showPredictions[_showId].isEnded,
+            showPredictions[_showId].winnerId
         );
     }
     
     /**
-     * @dev Get contestant information
+     * @dev Get agent prediction information
      * @param _showId ID of the show
-     * @param _contestantId ID of the contestant
+     * @param _agentId ID of the agent
      */
-    function getContestantInfo(uint256 _showId, uint256 _contestantId) external view showExists(_showId) validContestant(_showId, _contestantId) returns (
+    function getAgentPredictionInfo(uint256 _showId, uint256 _agentId) external view returns (
         string memory name,
-        uint256 totalVotes
+        uint256 totalContracts
     ) {
-        return (
-            contestants[_showId][_contestantId].name,
-            shows[_showId].votesPerContestant[_contestantId]
-        );
+        (name,,,) = showContract.getAgentInfo(_agentId);
+        totalContracts = showPredictions[_showId].totalContractsPerAgent[_agentId];
     }
     
     /**
-     * @dev Get user's votes for a specific contestant
+     * @dev Get user's predictions for a specific agent
      * @param _showId ID of the show
-     * @param _contestantId ID of the contestant
+     * @param _agentId ID of the agent
      * @param _user User address
      */
-    function getUserVotes(uint256 _showId, uint256 _contestantId, address _user) external view showExists(_showId) validContestant(_showId, _contestantId) returns (uint256) {
-        return shows[_showId].userVotes[_user][_contestantId];
+    function getUserPredictions(uint256 _showId, uint256 _agentId, address _user) external view returns (uint256) {
+        return showPredictions[_showId].userPredictions[_user][_agentId].contracts;
+    }
+    
+    /**
+     * @dev Get current show information from main contract
+     */
+    function getCurrentShowInfo() external view returns (
+        uint256 showId,
+        string memory name,
+        uint256 startTime,
+        uint256 endTime,
+        bool isActive,
+        uint256 prizePool,
+        uint256 participantCount
+    ) {
+        return showContract.getCurrentShow();
+    }
+    
+    /**
+     * @dev Get show participants from main contract
+     * @param _showId ID of the show
+     */
+    function getShowParticipants(uint256 _showId) external view returns (uint256[] memory) {
+        return showContract.getShowParticipants(_showId);
+    }
+    
+    /**
+     * @dev Update show contract address (owner only)
+     * @param _newShowContract New show contract address
+     */
+    function updateShowContract(address _newShowContract) external onlyOwner {
+        showContract = IShowContract(_newShowContract);
     }
     
     /**
@@ -301,15 +275,6 @@ contract PredictionMarket is ReentrancyGuard, Ownable, Pausable {
         
         (bool success, ) = payable(owner()).call{value: amount}("");
         require(success, "Withdrawal failed");
-    }
-    
-    /**
-     * @dev Update platform fee percentage (owner only)
-     * @param _newFeePercentage New fee percentage (0-10)
-     */
-    function updateFeePercentage(uint256 _newFeePercentage) external onlyOwner {
-        require(_newFeePercentage <= 10, "Fee percentage too high");
-        feePercentage = _newFeePercentage;
     }
     
     /**

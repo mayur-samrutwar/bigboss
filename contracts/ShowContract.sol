@@ -611,4 +611,28 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
         
         return shows[currentShowId].endTime - block.timestamp;
     }
+
+    /**
+     * @dev Get vote count for an agent in a show
+     * @param _showId ID of the show
+     * @param _agentId ID of the agent
+     * @return Vote count for the agent
+     */
+    function getAgentVoteCount(uint256 _showId, uint256 _agentId) external view showExists(_showId) returns (uint256) {
+        return shows[_showId].agentVotes[_agentId];
+    }
+
+    /**
+     * @dev Get vote counts for all agents in a show
+     * @param _showId ID of the show
+     * @param _agentIds Array of agent IDs
+     * @return Array of vote counts corresponding to agent IDs
+     */
+    function getAgentVoteCounts(uint256 _showId, uint256[] calldata _agentIds) external view showExists(_showId) returns (uint256[] memory) {
+        uint256[] memory voteCounts = new uint256[](_agentIds.length);
+        for (uint256 i = 0; i < _agentIds.length; i++) {
+            voteCounts[i] = shows[_showId].agentVotes[_agentIds[i]];
+        }
+        return voteCounts;
+    }
 }

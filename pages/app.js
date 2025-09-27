@@ -23,6 +23,21 @@ export default function App() {
   const [participants, setParticipants] = useState([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [newsOpen, setNewsOpen] = useState(false);
+
+  // Dummy news data
+  const newsUpdates = [
+    { id: 1, content: "Agent #3 betrayed Agent #7 in a shocking turn of events!", type: "betrayal", time: "2m ago" },
+    { id: 2, content: "Agent #1 completed the cooking task successfully!", type: "task", time: "5m ago" },
+    { id: 3, content: "Agent #5 and Agent #2 formed a secret alliance!", type: "alliance", time: "8m ago" },
+    { id: 4, content: "Agent #4 has been eliminated from the show!", type: "elimination", time: "12m ago" },
+    { id: 5, content: "Agent #6 won the immunity challenge!", type: "general", time: "15m ago" },
+    { id: 6, content: "Agent #8 was caught breaking house rules!", type: "general", time: "18m ago" },
+    { id: 7, content: "Agent #1 betrayed Agent #3 after their alliance!", type: "betrayal", time: "22m ago" },
+    { id: 8, content: "Agent #9 completed the cleaning task!", type: "task", time: "25m ago" },
+    { id: 9, content: "Agent #2 and Agent #5 formed a new alliance!", type: "alliance", time: "28m ago" },
+    { id: 10, content: "Agent #7 has been eliminated from the show!", type: "elimination", time: "32m ago" }
+  ];
 
   // Contract read functions
   const { data: currentShowId } = useReadContract({
@@ -367,6 +382,20 @@ export default function App() {
         </div>
       )}
 
+      {/* News Button - Left Side */}
+      <div className="absolute top-80 left-4 z-10">
+        <button
+          onClick={() => setNewsOpen(true)}
+          className="bg-orange-500 hover:bg-orange-400 text-white font-bold py-4 px-8 rounded-lg border-2 border-orange-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-orange-500/50"
+          style={{
+            fontFamily: 'monospace',
+            textShadow: '0 0 10px #ff8000'
+          }}
+        >
+          NEWS
+        </button>
+      </div>
+
       {/* Scroll Buttons */}
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 flex space-x-4">
         {/* Left Scroll Button */}
@@ -494,6 +523,60 @@ export default function App() {
               {isConnected && showInfo?.isActive && nextShowId && participants.length === 0 && 'No participants yet'}
               {isConnected && showInfo?.isActive && nextShowId && participants.length > 0 && !selectedWinner && 'Select an agent to predict'}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* News Sidebar - Left Side */}
+      <div className={`absolute top-1/2 left-0 transform -translate-y-1/2 bg-black/90 backdrop-blur-sm border-r-2 border-orange-500 transition-all duration-300 z-20 ${newsOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'}`} style={{ width: '350px' }}>
+        <div className="p-6">
+          {/* Panel Header */}
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-orange-400 font-mono text-lg">📰 NEWS UPDATES</h2>
+            <button
+              onClick={() => setNewsOpen(false)}
+              className="text-orange-400 hover:text-orange-300 font-mono text-xl"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* News Feed */}
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {newsUpdates.map((news) => (
+              <div key={news.id} className="p-3 bg-gray-800/50 border border-orange-500/30 rounded">
+                <div className="flex items-start space-x-2">
+                  <div className="text-orange-400 text-sm font-mono">
+                    {news.type === 'betrayal' && '💔'}
+                    {news.type === 'elimination' && '💀'}
+                    {news.type === 'alliance' && '🤝'}
+                    {news.type === 'task' && '📋'}
+                    {news.type === 'general' && '📢'}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-orange-300 font-mono text-sm leading-relaxed">
+                      {news.content}
+                    </p>
+                    <div className="text-orange-500 font-mono text-xs mt-1">
+                      {news.time}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Refresh Button */}
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => {
+                // In a real app, this would refresh news data
+                console.log('Refreshing news...');
+              }}
+              className="bg-orange-500 hover:bg-orange-400 text-white font-bold py-2 px-4 rounded text-sm"
+            >
+              REFRESH NEWS
+            </button>
           </div>
         </div>
       </div>

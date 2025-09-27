@@ -1,10 +1,11 @@
 import WalletConnect from '../components/WalletConnect';
-
+import Character from '../components/Character';
 import { useState, useEffect } from 'react';
 
 export default function App() {
   const [scrollPosition, setScrollPosition] = useState(0);
   const [imageWidth, setImageWidth] = useState(0);
+  const [imageHeight, setImageHeight] = useState(0);
   const [maxScroll, setMaxScroll] = useState(0);
   
   // Calculate max scroll based on image dimensions (9270 × 3700)
@@ -18,6 +19,7 @@ export default function App() {
       const maxScrollValue = Math.max(0, imageDisplayWidth - viewportWidth);
       
       setImageWidth(imageDisplayWidth);
+      setImageHeight(viewportHeight);
       setMaxScroll(maxScrollValue);
     };
     
@@ -59,6 +61,25 @@ export default function App() {
         }}
       />
       
+      {/* Character - Positioned relative to the image container */}
+      {imageWidth > 0 && imageHeight > 0 && (
+        <div 
+          className="absolute top-0 left-0 pointer-events-none"
+          style={{
+            width: `${imageWidth}px`,
+            height: `${imageHeight}px`,
+            transform: `translateX(-${scrollPosition}px)`,
+          }}
+        >
+          <Character 
+            roomWidth={imageWidth}
+            roomHeight={imageHeight}
+            imageWidth={imageWidth}
+            imageHeight={imageHeight}
+          />
+        </div>
+      )}
+
       {/* Wallet Connect Button - Top Right */}
       <div className="absolute top-4 right-4 z-10">
         <WalletConnect />

@@ -26,11 +26,22 @@ export default function Admin() {
     functionName: 'currentShowId',
   });
 
-  const { data: showData } = useReadContract({
+  const { data: nextShowId } = useReadContract({
     address: SHOW_CONTRACT_ADDRESS,
     abi: SHOW_CONTRACT_ABI,
-    functionName: 'getShow',
-    args: currentShowId ? [currentShowId] : undefined,
+    functionName: 'nextShowId',
+  });
+
+  const { data: currentShowData } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'getCurrentShow',
+  });
+
+  const { data: nextShowData } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'getNextShow',
   });
 
   const { data: contractOwner } = useReadContract({
@@ -62,6 +73,28 @@ export default function Admin() {
       });
     } catch (err) {
       setError('Failed to start new show: ' + err.message);
+    }
+  };
+
+  const beginShow = async () => {
+    if (!isAdmin) {
+      setError('Only contract owner can begin a show');
+      return;
+    }
+
+    if (!nextShowId) {
+      setError('No next show available to begin');
+      return;
+    }
+
+    try {
+      writeContract({
+        address: SHOW_CONTRACT_ADDRESS,
+        abi: SHOW_CONTRACT_ABI,
+        functionName: 'beginShow',
+      });
+    } catch (err) {
+      setError('Failed to begin show: ' + err.message);
     }
   };
 
@@ -127,20 +160,20 @@ export default function Admin() {
 
   // Update show info when contract data changes
   useEffect(() => {
-    if (showData) {
-      const [showId, startTime, endTime, isActive, isEnded, entryFee, totalPrize, winnerAgentId, participatingAgents] = showData;
+    if (currentShowData) {
+      const [showId, startTime, endTime, isActive, entryFee, totalPrize, participantCount] = currentShowData;
       setShowInfo({
         showId: Number(showId),
         startTime: Number(startTime) * 1000, // Convert to milliseconds
         endTime: Number(endTime) * 1000,
         isActive,
-        isEnded,
+        isEnded: false, // Current show is never ended
         entryFee: (Number(entryFee) / 1e18).toFixed(4), // Convert from wei to ETH
         totalPrize: (Number(totalPrize) / 1e18).toFixed(4),
-        participantCount: participatingAgents.length
+        participantCount: Number(participantCount)
       });
     }
-  }, [showData]);
+  }, [currentShowData]);
 
   // Handle transaction success
   useEffect(() => {
@@ -302,7 +335,20 @@ export default function Admin() {
                     textShadow: '0 0 10px #00ff00'
                   }}
                 >
-                  {isPending ? 'SENDING...' : isConfirming ? 'CONFIRMING...' : 'START NEW SHOW'}
+                  {isPending ? 'SENDING...' : isConfirming ? 'CONFIRMING...' : 'CREATE SHOW'}
+                </button>
+
+                {/* Begin Show Button */}
+                <button
+                  onClick={beginShow}
+                  disabled={!isAdmin || !nextShowId || isPending || isConfirming}
+                  className="bg-blue-500 hover:bg-blue-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-8 rounded-lg border-2 border-blue-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50"
+                  style={{
+                    fontFamily: 'monospace',
+                    textShadow: '0 0 10px #0066ff'
+                  }}
+                >
+                  {isPending ? 'SENDING...' : isConfirming ? 'CONFIRMING...' : 'START PLAYING'}
                 </button>
 
                 

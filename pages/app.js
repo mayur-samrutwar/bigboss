@@ -30,10 +30,22 @@ export default function App() {
     functionName: 'currentShowId',
   });
 
+  const { data: nextShowId } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'nextShowId',
+  });
+
   const { data: currentShowData } = useReadContract({
     address: SHOW_CONTRACT_ADDRESS,
     abi: SHOW_CONTRACT_ABI,
     functionName: 'getCurrentShow',
+  });
+
+  const { data: nextShowData } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'getNextShow',
   });
 
   const { data: showParticipants } = useReadContract({
@@ -41,6 +53,12 @@ export default function App() {
     abi: SHOW_CONTRACT_ABI,
     functionName: 'getShowParticipants',
     args: currentShowId ? [currentShowId] : undefined,
+  });
+
+  const { data: nextShowParticipants } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'getNextShowParticipants',
   });
 
   const { data: agentVoteCounts } = useReadContract({
@@ -82,8 +100,8 @@ export default function App() {
       return;
     }
 
-    if (!currentShowId || !showInfo?.isActive) {
-      setError('No active show to predict on!');
+    if (!nextShowId || !nextShowData?.isActive) {
+      setError('No next show available for predictions!');
       return;
     }
 
@@ -96,7 +114,7 @@ export default function App() {
         address: PREDICTION_MARKET_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
         functionName: 'placePrediction',
-        args: [currentShowId, BigInt(selectedWinner), BigInt(contracts)],
+        args: [nextShowId, BigInt(selectedWinner), BigInt(contracts)],
         value: predictionFee,
       });
     } catch (err) {
@@ -144,8 +162,8 @@ export default function App() {
 
   // Update show info when contract data changes
   useEffect(() => {
-    if (currentShowData) {
-      const [showId, startTime, endTime, isActive, entryFee, totalPrize, participantCount] = currentShowData;
+    if (nextShowData) {
+      const [showId, startTime, endTime, isActive, entryFee, totalPrize, participantCount] = nextShowData;
       setShowInfo({
         showId: Number(showId),
         startTime: Number(startTime) * 1000,
@@ -156,18 +174,18 @@ export default function App() {
         participantCount: Number(participantCount)
       });
     }
-  }, [currentShowData]);
+  }, [nextShowData]);
 
   // Update participants when show participants data changes
   useEffect(() => {
-    if (showParticipants) {
-      const [agentIds, participantAddresses] = showParticipants;
+    if (nextShowParticipants) {
+      const [agentIds, participantAddresses] = nextShowParticipants;
       setParticipants(agentIds.map((id, index) => ({
         agentId: id.toString(),
         address: participantAddresses[index]
       })));
     }
-  }, [showParticipants]);
+  }, [nextShowParticipants]);
 
   // Handle transaction success
   useEffect(() => {
@@ -422,7 +440,7 @@ export default function App() {
             {/* Buy Button */}
             <button
               onClick={handleBuy}
-              disabled={!selectedWinner || !isConnected || !showInfo?.isActive || isPending || isConfirming}
+              disabled={!selectedWinner || !isConnected || !showInfo?.isActive || !nextShowId || isPending || isConfirming}
               className="w-full bg-green-500 hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold py-3 px-4 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
               style={{
                 fontFamily: 'monospace',
@@ -435,9 +453,9 @@ export default function App() {
             {/* Prediction Info */}
             <div className="mt-2 text-xs text-green-300 font-mono text-center">
               {!isConnected && 'Connect wallet to predict'}
-              {isConnected && !showInfo?.isActive && 'No active show'}
-              {isConnected && showInfo?.isActive && participants.length === 0 && 'No participants yet'}
-              {isConnected && showInfo?.isActive && participants.length > 0 && !selectedWinner && 'Select an agent to predict'}
+              {isConnected && (!showInfo?.isActive || !nextShowId) && 'No next show available'}
+              {isConnected && showInfo?.isActive && nextShowId && participants.length === 0 && 'No participants yet'}
+              {isConnected && showInfo?.isActive && nextShowId && participants.length > 0 && !selectedWinner && 'Select an agent to predict'}
             </div>
           </div>
         </div>

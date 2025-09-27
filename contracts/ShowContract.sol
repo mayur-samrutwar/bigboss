@@ -79,6 +79,7 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
     uint256 public showCounter;
     uint256 public agentCounter;
     uint256 public currentShowId;
+    uint256 public nextShowId; // ID of the next show users can participate in
     uint256 public totalPlatformFees;
     
     // Modifiers
@@ -224,14 +225,28 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
     
     function _startNewShow() internal {
         showCounter++;
-        currentShowId = showCounter;
+        nextShowId = showCounter;
         
-        shows[currentShowId].showId = currentShowId;
-        shows[currentShowId].startTime = block.timestamp;
-        shows[currentShowId].endTime = block.timestamp + SHOW_DURATION;
-        shows[currentShowId].isActive = true;
-        shows[currentShowId].isEnded = false;
-        shows[currentShowId].entryFee = 0.01 ether; // Default entry fee
+        shows[nextShowId].showId = nextShowId;
+        shows[nextShowId].startTime = block.timestamp;
+        shows[nextShowId].endTime = block.timestamp + SHOW_DURATION;
+        shows[nextShowId].isActive = true;
+        shows[nextShowId].isEnded = false;
+        shows[nextShowId].entryFee = 0.01 ether; // Default entry fee
+        
+        emit ShowStarted(nextShowId, shows[nextShowId].startTime, shows[nextShowId].endTime, shows[nextShowId].entryFee);
+    }
+    
+    /**
+     * @dev Begin the next show (transition from nextShowId to currentShowId)
+     * This should be called when the show actually starts playing
+     */
+    function beginShow() external onlyOwner {
+        require(nextShowId > 0, "No next show available");
+        require(currentShowId == 0 || shows[currentShowId].isEnded, "Current show is still active");
+        
+        currentShowId = nextShowId;
+        nextShowId = 0; // Clear next show since it's now current
         
         emit ShowStarted(currentShowId, shows[currentShowId].startTime, shows[currentShowId].endTime, shows[currentShowId].entryFee);
     }
@@ -275,6 +290,34 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
         }
         
         Show storage show = shows[currentShowId];
+        return (
+            show.showId,
+            show.startTime,
+            show.endTime,
+            show.isActive,
+            show.entryFee,
+            show.totalPrize,
+            show.participatingAgents.length
+        );
+    }
+    
+    /**
+     * @dev Get next show information (for participation)
+     */
+    function getNextShow() external view returns (
+        uint256 showId,
+        uint256 startTime,
+        uint256 endTime,
+        bool isActive,
+        uint256 entryFee,
+        uint256 totalPrize,
+        uint256 participantCount
+    ) {
+        if (nextShowId == 0) {
+            return (0, 0, 0, false, 0, 0, 0);
+        }
+        
+        Show storage show = shows[nextShowId];
         return (
             show.showId,
             show.startTime,
@@ -352,7 +395,27 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
     }
     
     /**
-     * @dev Participate in a show with an agent
+     * @dev Participate in the next show with an agent
+     * @param _agentId ID of the agent
+     */
+    function participateInNextShow(
+        uint256 _agentId
+    ) external payable nonReentrant agentExists(_agentId) agentActive(_agentId) agentAlive(_agentId) {
+        require(nextShowId > 0, "No next show available for participation");
+        require(agents[_agentId].owner == msg.sender, "Not the agent owner");
+        require(shows[nextShowId].participatingAgents.length < MAX_PARTICIPANTS_PER_SHOW, "Next show is full");
+        require(msg.value == shows[nextShowId].entryFee, "Incorrect entry fee");
+        require(!_isAgentParticipating(nextShowId, _agentId), "Agent already participating in next show");
+        
+        shows[nextShowId].participatingAgents.push(_agentId);
+        shows[nextShowId].totalPrize += msg.value;
+        shows[nextShowId].participants.push(msg.sender);
+        
+        emit AgentParticipated(nextShowId, _agentId, msg.sender);
+    }
+    
+    /**
+     * @dev Participate in a show with an agent (legacy function for backward compatibility)
      * @param _showId ID of the show
      * @param _agentId ID of the agent
      */
@@ -360,6 +423,7 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
         uint256 _showId,
         uint256 _agentId
     ) external payable nonReentrant showExists(_showId) showActive(_showId) agentExists(_agentId) agentActive(_agentId) agentAlive(_agentId) {
+        require(_showId == nextShowId, "Can only participate in next show");
         require(agents[_agentId].owner == msg.sender, "Not the agent owner");
         require(block.timestamp < shows[_showId].endTime, "Show has ended");
         require(shows[_showId].participatingAgents.length < MAX_PARTICIPANTS_PER_SHOW, "Show is full");
@@ -521,6 +585,19 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
         address[] memory participantAddresses
     ) {
         return (shows[_showId].participatingAgents, shows[_showId].participants);
+    }
+    
+    /**
+     * @dev Get next show participants
+     */
+    function getNextShowParticipants() external view returns (
+        uint256[] memory agentIds,
+        address[] memory participantAddresses
+    ) {
+        if (nextShowId == 0) {
+            return (new uint256[](0), new address[](0));
+        }
+        return (shows[nextShowId].participatingAgents, shows[nextShowId].participants);
     }
     
     /**

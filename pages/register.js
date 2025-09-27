@@ -24,16 +24,16 @@ export default function Register() {
   const [showInfo, setShowInfo] = useState(null);
 
   // Contract read functions
-  const { data: currentShowId } = useReadContract({
+  const { data: nextShowId } = useReadContract({
     address: SHOW_CONTRACT_ADDRESS,
     abi: SHOW_CONTRACT_ABI,
-    functionName: 'currentShowId',
+    functionName: 'nextShowId',
   });
 
-  const { data: currentShowData } = useReadContract({
+  const { data: nextShowData } = useReadContract({
     address: SHOW_CONTRACT_ADDRESS,
     abi: SHOW_CONTRACT_ABI,
-    functionName: 'getCurrentShow',
+    functionName: 'getNextShow',
   });
 
   const { data: userAgents } = useReadContract({
@@ -80,8 +80,8 @@ export default function Register() {
   };
 
   const participateInShow = async () => {
-    if (!agentId || !currentShowId) {
-      setError('No agent selected or no active show');
+    if (!agentId || !nextShowId) {
+      setError('No agent selected or no next show available');
       return;
     }
 
@@ -90,13 +90,13 @@ export default function Register() {
       setError('');
 
       // Get entry fee from show data
-      const entryFee = currentShowData ? currentShowData.entryFee : BigInt('10000000000000000'); // 0.01 ETH default
+      const entryFee = nextShowData ? nextShowData.entryFee : BigInt('10000000000000000'); // 0.01 ETH default
       
       writeContract({
         address: SHOW_CONTRACT_ADDRESS,
         abi: SHOW_CONTRACT_ABI,
-        functionName: 'participateInShow',
-        args: [currentShowId, BigInt(agentId)],
+        functionName: 'participateInNextShow',
+        args: [BigInt(agentId)],
         value: entryFee,
       });
     } catch (err) {
@@ -129,8 +129,8 @@ export default function Register() {
 
   // Update show info when contract data changes
   useEffect(() => {
-    if (currentShowData) {
-      const [showId, startTime, endTime, isActive, entryFee, totalPrize, participantCount] = currentShowData;
+    if (nextShowData) {
+      const [showId, startTime, endTime, isActive, entryFee, totalPrize, participantCount] = nextShowData;
       setShowInfo({
         showId: Number(showId),
         startTime: Number(startTime) * 1000,
@@ -141,7 +141,7 @@ export default function Register() {
         participantCount: Number(participantCount)
       });
     }
-  }, [currentShowData]);
+  }, [nextShowData]);
 
   // Set agent ID when user agents are loaded
   useEffect(() => {
@@ -306,7 +306,7 @@ export default function Register() {
                 {/* Join Show Button */}
                 <button
                   onClick={participateInShow}
-                  disabled={!isConnected || !showInfo.isActive || loading || isPending || isConfirming}
+                  disabled={!isConnected || !showInfo?.isActive || !nextShowId || loading || isPending || isConfirming}
                   className="w-full bg-blue-500 hover:bg-blue-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-8 rounded-lg border-2 border-blue-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50"
                   style={{
                     fontFamily: 'monospace',
@@ -318,11 +318,11 @@ export default function Register() {
               </div>
             )}
 
-            {/* No Active Show Message */}
-            {step === 2 && (!showInfo || !showInfo.isActive) && (
+            {/* No Next Show Message */}
+            {step === 2 && (!showInfo || !showInfo.isActive || !nextShowId) && (
               <div className="space-y-6">
                 <div className="bg-red-900/20 border border-red-500 text-red-400 font-mono p-4 rounded">
-                  NO ACTIVE SHOW AVAILABLE
+                  NO SHOW AVAILABLE FOR PARTICIPATION
                 </div>
                 <button
                   onClick={() => router.push('/admin')}

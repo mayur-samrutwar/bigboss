@@ -1,25 +1,20 @@
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useRouter } from 'next/router';
 import WalletConnect from '../components/WalletConnect';
-import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS } from '../lib/contract';
+import { SHOW_CONTRACT_ADDRESS, SHOW_CONTRACT_ABI } from '../lib/contract';
 
 export default function Admin() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
-  const { writeContract, data: hash, error: writeError, isPending } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
-    hash,
-  });
   
-  const [showInfo, setShowInfo] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [winnerAgentId, setWinnerAgentId] = useState('');
-  const [killAgentId, setKillAgentId] = useState('');
-  const [killShowId, setKillShowId] = useState('');
+  // Contract read hooks
+  const { data: contractOwner } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'owner',
+  });
 
-  // Contract read functions
   const { data: currentShowId } = useReadContract({
     address: SHOW_CONTRACT_ADDRESS,
     abi: SHOW_CONTRACT_ABI,
@@ -42,172 +37,123 @@ export default function Admin() {
     address: SHOW_CONTRACT_ADDRESS,
     abi: SHOW_CONTRACT_ABI,
     functionName: 'getNextShow',
+    args: nextShowId ? [nextShowId] : undefined,
   });
 
-  const { data: contractOwner } = useReadContract({
-    address: SHOW_CONTRACT_ADDRESS,
-    abi: SHOW_CONTRACT_ABI,
-    functionName: 'owner',
+  // Contract write hooks
+  const { writeContract, isPending, isConfirming, error, data: hash } = useWriteContract();
+  const { isConfirmed } = useWaitForTransactionReceipt({
+    hash: hash,
   });
 
-  const { data: isPaused } = useReadContract({
-    address: SHOW_CONTRACT_ADDRESS,
-    abi: SHOW_CONTRACT_ABI,
-    functionName: 'paused',
-  });
-
-  // Check if current user is admin
-  const isAdmin = address && contractOwner && address.toLowerCase() === contractOwner.toLowerCase();
-  
-  // Debug logging
+  // Refresh data when transaction is confirmed
   useEffect(() => {
-    console.log('🔍 Admin Debug Info:');
-    console.log('Connected Address:', address);
-    console.log('Contract Owner:', contractOwner);
-    console.log('Is Admin:', isAdmin);
-    console.log('Is Connected:', isConnected);
-  }, [address, contractOwner, isAdmin, isConnected]);
-
-  const startNewShow = async () => {
-    if (!isAdmin) {
-      setError('Only contract owner can start a new show');
-      return;
+    if (isConfirmed) {
+      // Force a page refresh to get updated data
+      window.location.reload();
     }
+  }, [isConfirmed]);
 
+  // State
+  const [showInfo, setShowInfo] = useState(null);
+  const [winnerAgentId, setWinnerAgentId] = useState('');
+  const [killShowId, setKillShowId] = useState('');
+  const [killAgentId, setKillAgentId] = useState('');
+
+  // Check if user is admin
+  const isAdmin = isConnected && address && contractOwner && address.toLowerCase() === contractOwner.toLowerCase();
+
+  // Update show info when data changes
+  useEffect(() => {
+    console.log('Current show data:', currentShowData);
+    console.log('Current show ID:', currentShowId);
+    console.log('Next show ID:', nextShowId);
+    
+    if (currentShowData) {
+      const showData = {
+        showId: Number(currentShowData[0]),
+        startTime: Number(currentShowData[1]) * 1000,
+        endTime: Number(currentShowData[2]) * 1000,
+        isActive: currentShowData[3],
+        entryFee: (Number(currentShowData[4]) / 1e18).toFixed(4),
+        totalPrize: (Number(currentShowData[5]) / 1e18).toFixed(4),
+        participantCount: Number(currentShowData[6])
+      };
+      console.log('Processed show data:', showData);
+      setShowInfo(showData);
+    } else {
+      setShowInfo(null);
+    }
+  }, [currentShowData, currentShowId, nextShowId]);
+
+  // Contract functions
+  const startNewShow = async () => {
     try {
-      writeContract({
+      await writeContract({
         address: SHOW_CONTRACT_ADDRESS,
         abi: SHOW_CONTRACT_ABI,
         functionName: 'startShow',
       });
     } catch (err) {
-      setError('Failed to start new show: ' + err.message);
+      console.error('Error starting new show:', err);
     }
   };
 
   const beginShow = async () => {
-    if (!isAdmin) {
-      setError('Only contract owner can begin a show');
-      return;
-    }
-
-    if (!nextShowId) {
-      setError('No next show available to begin');
-      return;
-    }
-
     try {
-      writeContract({
+      await writeContract({
         address: SHOW_CONTRACT_ADDRESS,
         abi: SHOW_CONTRACT_ABI,
         functionName: 'beginShow',
       });
     } catch (err) {
-      setError('Failed to begin show: ' + err.message);
+      console.error('Error beginning show:', err);
     }
   };
 
   const endCurrentShow = async () => {
-    if (!isAdmin) {
-      setError('Only contract owner can end a show');
-      return;
-    }
-
-    if (!winnerAgentId) {
-      setError('Please enter a winner agent ID');
-      return;
-    }
-
+    if (!winnerAgentId || !currentShowId) return;
+    
     try {
-      writeContract({
+      await writeContract({
         address: SHOW_CONTRACT_ADDRESS,
         abi: SHOW_CONTRACT_ABI,
         functionName: 'endShow',
-        args: [BigInt(winnerAgentId)],
+        args: [currentShowId, BigInt(winnerAgentId)],
       });
     } catch (err) {
-      setError('Failed to end show: ' + err.message);
+      console.error('Error ending show:', err);
     }
   };
 
   const killAgent = async () => {
-    if (!isAdmin) {
-      setError('Only contract owner can kill an agent');
-      return;
-    }
-
-    if (!killAgentId || !killShowId) {
-      setError('Please enter both show ID and agent ID');
-      return;
-    }
-
+    if (!killAgentId || !killShowId) return;
+    
     try {
-      const response = await fetch('/api/killAgent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          showId: killShowId,
-          agentId: killAgentId
-        })
+      await writeContract({
+        address: SHOW_CONTRACT_ADDRESS,
+        abi: SHOW_CONTRACT_ABI,
+        functionName: 'killAgent',
+        args: [BigInt(killShowId), BigInt(killAgentId)],
       });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        alert(`Agent ${killAgentId} killed successfully in show ${killShowId}!`);
-        setKillAgentId('');
-        setKillShowId('');
-      } else {
-        setError(result.error || 'Failed to kill agent');
-      }
     } catch (err) {
-      setError('Failed to kill agent: ' + err.message);
+      console.error('Error killing agent:', err);
     }
   };
 
-  // Update show info when contract data changes
-  useEffect(() => {
-    if (currentShowData) {
-      const [showId, startTime, endTime, isActive, entryFee, totalPrize, participantCount] = currentShowData;
-      setShowInfo({
-        showId: Number(showId),
-        startTime: Number(startTime) * 1000, // Convert to milliseconds
-        endTime: Number(endTime) * 1000,
-        isActive,
-        isEnded: false, // Current show is never ended
-        entryFee: (Number(entryFee) / 1e18).toFixed(4), // Convert from wei to ETH
-        totalPrize: (Number(totalPrize) / 1e18).toFixed(4),
-        participantCount: Number(participantCount)
-      });
-    }
-  }, [currentShowData]);
-
-  // Handle transaction success
-  useEffect(() => {
-    if (isConfirmed) {
-      setError('');
-      alert('Transaction confirmed successfully!');
-    }
-  }, [isConfirmed]);
-
-  // Handle write errors
-  useEffect(() => {
-    if (writeError) {
-      setError('Transaction failed: ' + writeError.message);
-    }
-  }, [writeError]);
-
+  // Utility functions
   const formatTime = (timestamp) => {
+    if (!timestamp || timestamp === 0) return 'Not set';
     return new Date(timestamp).toLocaleString();
   };
 
   const getTimeRemaining = (endTime) => {
+    if (!endTime || endTime === 0) return 'Not set';
+    
     const now = Date.now();
     const remaining = endTime - now;
     
-    if (remaining <= 0) return 'Show has ended';
+    if (remaining <= 0) return 'Ended';
     
     const minutes = Math.floor(remaining / 60000);
     const seconds = Math.floor((remaining % 60000) / 1000);
@@ -216,216 +162,225 @@ export default function Admin() {
   };
 
   return (
-    <div className="relative w-full h-screen bg-black">
-      {/* CRT Monitor Screen - Full Screen */}
-      <div className="relative w-full h-full bg-black overflow-hidden crt-screen">
-        {/* CRT Scanlines */}
-        <div className="absolute inset-0 scanlines"></div>
+    <div className="w-full min-h-screen bg-white p-8 overflow-y-auto">
+      <div className="max-w-4xl mx-auto">
+        {/* Title */}
+        <h1 className="text-3xl font-bold text-gray-800 mb-8">Admin Panel</h1>
         
-        {/* Heavy Noise Texture */}
-        <div className="absolute inset-0 noise"></div>
-
-        {/* Dense Noise Particles */}
-        <div className="absolute inset-0 pointer-events-none">
-          {[...Array(800)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute bg-white"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                width: `${Math.random() * 2 + 0.5}px`,
-                height: `${Math.random() * 2 + 0.5}px`,
-                opacity: Math.random() * 0.9 + 0.1,
-                animation: `noise ${Math.random() * 0.3 + 0.05}s linear infinite`
-              }}
-            />
-          ))}
+        {/* Wallet Connect */}
+        <div className="mb-8">
+          <WalletConnect />
         </div>
 
-        {/* Content Area */}
-        <div className="relative z-10 w-full h-full flex items-center justify-center">
-          <div className="text-center max-w-4xl mx-auto px-8">
-            {/* Title */}
-            <div className="text-green-400 font-mono text-4xl mb-8 animate-pulse">
-              ADMIN PANEL
-            </div>
-            
-            {/* Wallet Connect */}
-            <div className="mb-8">
-              <WalletConnect />
-            </div>
-
-            {/* Admin Status */}
-            {isConnected && (
-              <div className="mb-6">
-                {isAdmin ? (
-                  <div className="bg-green-900/20 border border-green-500 text-green-400 font-mono p-4 rounded">
-                    ✓ ADMIN ACCESS GRANTED
-                  </div>
-                ) : (
-                  <div className="bg-red-900/20 border border-red-500 text-red-400 font-mono p-4 rounded">
-                    ✗ ADMIN ACCESS DENIED - Only contract owner can perform admin actions
-                  </div>
-                )}
-                
-                {/* Debug Info */}
-                <div className="bg-gray-900/20 border border-gray-500 text-gray-400 font-mono p-4 rounded mt-4 text-sm">
-                  <div>🔍 DEBUG INFO:</div>
-                  <div>Connected Address: {address || 'Not connected'}</div>
-                  <div>Contract Owner: {contractOwner || 'Loading...'}</div>
-                  <div>Is Admin: {isAdmin ? 'YES' : 'NO'}</div>
-                  <div>Contract Address: {SHOW_CONTRACT_ADDRESS}</div>
-                </div>
-              </div>
-            )}
-
-            {/* Error Message */}
-            {error && (
-              <div className="bg-red-900/20 border border-red-500 text-red-400 font-mono p-4 rounded mb-6">
-                ERROR: {error}
-              </div>
-            )}
-
-            {/* Current Show Info */}
-            {showInfo && (
-              <div className="bg-green-900/20 border border-green-500 rounded-lg p-6 mb-8">
-                <h2 className="text-green-400 font-mono text-2xl mb-4">CURRENT SHOW STATUS</h2>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-                  <div>
-                    <span className="text-green-300 font-mono">Show ID:</span>
-                    <span className="text-green-400 font-mono ml-2">{showInfo.showId}</span>
-                  </div>
-                  
-                  <div>
-                    <span className="text-green-300 font-mono">Status:</span>
-                    <span className={`font-mono ml-2 ${showInfo.isActive ? 'text-green-400' : 'text-red-400'}`}>
-                      {showInfo.isActive ? 'ACTIVE' : 'INACTIVE'}
-                    </span>
-                  </div>
-                  
-                  <div>
-                    <span className="text-green-300 font-mono">Start Time:</span>
-                    <span className="text-green-400 font-mono ml-2">{formatTime(showInfo.startTime)}</span>
-                  </div>
-                  
-                  <div>
-                    <span className="text-green-300 font-mono">End Time:</span>
-                    <span className="text-green-400 font-mono ml-2">{formatTime(showInfo.endTime)}</span>
-                  </div>
-                  
-                  <div>
-                    <span className="text-green-300 font-mono">Time Remaining:</span>
-                    <span className="text-green-400 font-mono ml-2">{getTimeRemaining(showInfo.endTime)}</span>
-                  </div>
-                  
-                  <div>
-                    <span className="text-green-300 font-mono">Entry Fee:</span>
-                    <span className="text-green-400 font-mono ml-2">{showInfo.entryFee} ETH</span>
-                  </div>
-                  
-                  <div>
-                    <span className="text-green-300 font-mono">Total Prize:</span>
-                    <span className="text-green-400 font-mono ml-2">{showInfo.totalPrize} ETH</span>
-                  </div>
-                  
-                  <div>
-                    <span className="text-green-300 font-mono">Participants:</span>
-                    <span className="text-green-400 font-mono ml-2">{showInfo.participantCount}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Admin Actions */}
-            <div className="space-y-4">
-              <h2 className="text-green-400 font-mono text-2xl mb-6">ADMIN ACTIONS</h2>
-              
-              <div className="flex flex-col gap-6">
-                {/* Start New Show Button */}
-                <button
-                  onClick={startNewShow}
-                  disabled={!isAdmin || isPending || isConfirming || (showInfo && showInfo.isActive)}
-                  className="bg-green-500 hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold py-4 px-8 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
-                  style={{
-                    fontFamily: 'monospace',
-                    textShadow: '0 0 10px #00ff00'
-                  }}
-                >
-                  {isPending ? 'SENDING...' : isConfirming ? 'CONFIRMING...' : 'CREATE SHOW'}
-                </button>
-
-                {/* Begin Show Button */}
-                <button
-                  onClick={beginShow}
-                  disabled={!isAdmin || !nextShowId || isPending || isConfirming}
-                  className="bg-blue-500 hover:bg-blue-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-8 rounded-lg border-2 border-blue-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50"
-                  style={{
-                    fontFamily: 'monospace',
-                    textShadow: '0 0 10px #0066ff'
-                  }}
-                >
-                  {isPending ? 'SENDING...' : isConfirming ? 'CONFIRMING...' : 'START PLAYING'}
-                </button>
-
-                
-              </div>
-            </div>
-
-            {/* Back Button */}
-            <button
-              onClick={() => router.back()}
-              className="mt-8 text-green-400 hover:text-green-300 font-mono text-sm underline transition-colors duration-300"
+        {/* Debug Info */}
+        {isConnected && (
+          <div className="mb-6 p-4 bg-gray-100 rounded">
+            <h3 className="font-semibold mb-2">Debug Info:</h3>
+            <p>Connected Address: {address || 'Not connected'}</p>
+            <p>Contract Owner: {contractOwner || 'Loading...'}</p>
+            <p>Is Admin: {isAdmin ? 'YES' : 'NO'}</p>
+            <p>Contract Address: {SHOW_CONTRACT_ADDRESS}</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="mt-2 px-3 py-1 bg-blue-500 text-white rounded text-sm"
             >
-              ← BACK
+              Refresh Data
             </button>
           </div>
-        </div>
+        )}
 
-        {/* Screen Flicker Effect */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div 
-            className="w-full h-full bg-black opacity-0"
-            style={{
-              animation: 'screenFlicker 0.1s linear infinite'
-            }}
-          />
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+            ERROR: {error.message}
+          </div>
+        )}
+
+        {/* Current Show Info */}
+        {showInfo ? (
+          <div className="mb-8 p-6 bg-green-50 border border-green-200 rounded">
+            <h2 className="text-xl font-semibold text-green-800 mb-4">Current Show Status</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <span className="font-medium">Show ID:</span>
+                <span className="ml-2">{showInfo.showId}</span>
+              </div>
+              
+              <div>
+                <span className="font-medium">Status:</span>
+                <span className={`ml-2 ${showInfo.isActive ? 'text-green-600' : 'text-red-600'}`}>
+                  {showInfo.isActive ? 'ACTIVE' : 'INACTIVE'}
+                </span>
+              </div>
+              
+              <div>
+                <span className="font-medium">Start Time:</span>
+                <span className="ml-2">{formatTime(showInfo.startTime)}</span>
+              </div>
+              
+              <div>
+                <span className="font-medium">End Time:</span>
+                <span className="ml-2">{formatTime(showInfo.endTime)}</span>
+              </div>
+              
+              <div>
+                <span className="font-medium">Time Remaining:</span>
+                <span className="ml-2">{getTimeRemaining(showInfo.endTime)}</span>
+              </div>
+              
+              <div>
+                <span className="font-medium">Entry Fee:</span>
+                <span className="ml-2">{showInfo.entryFee} ETH</span>
+              </div>
+              
+              <div>
+                <span className="font-medium">Total Prize:</span>
+                <span className="ml-2">{showInfo.totalPrize} ETH</span>
+              </div>
+              
+              <div>
+                <span className="font-medium">Participants:</span>
+                <span className="ml-2">{showInfo.participantCount}</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="mb-8 p-6 bg-gray-50 border border-gray-200 rounded">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">No Current Show</h2>
+            <p className="text-gray-600">No active show is currently running.</p>
+            <div className="mt-4 text-sm text-gray-500">
+              <p>Current Show ID: {currentShowId || 'None'}</p>
+              <p>Next Show ID: {nextShowId || 'None'}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Next Show Info */}
+        {nextShowData && (
+          <div className="mb-8 p-6 bg-blue-50 border border-blue-200 rounded">
+            <h2 className="text-xl font-semibold text-blue-800 mb-4">Next Show Status</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <span className="font-medium">Show ID:</span>
+                <span className="ml-2">{Number(nextShowData[0])}</span>
+              </div>
+              
+              <div>
+                <span className="font-medium">Status:</span>
+                <span className={`ml-2 ${nextShowData[3] ? 'text-green-600' : 'text-yellow-600'}`}>
+                  {nextShowData[3] ? 'ACTIVE' : 'PREPARATION'}
+                </span>
+              </div>
+              
+              <div>
+                <span className="font-medium">Start Time:</span>
+                <span className="ml-2">{formatTime(Number(nextShowData[1]) * 1000)}</span>
+              </div>
+              
+              <div>
+                <span className="font-medium">End Time:</span>
+                <span className="ml-2">{formatTime(Number(nextShowData[2]) * 1000)}</span>
+              </div>
+              
+              <div>
+                <span className="font-medium">Entry Fee:</span>
+                <span className="ml-2">{(Number(nextShowData[4]) / 1e18).toFixed(4)} ETH</span>
+              </div>
+              
+              <div>
+                <span className="font-medium">Participants:</span>
+                <span className="ml-2">{Number(nextShowData[6])}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Admin Actions */}
+        <div className="space-y-6">
+          <h2 className="text-2xl font-semibold text-gray-800">Admin Actions</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Start New Show */}
+            <div className="p-4 border border-gray-200 rounded">
+              <h3 className="font-semibold mb-2">Start New Show</h3>
+              <p className="text-sm text-gray-600 mb-4">Create a new show for participants to join.</p>
+              <button
+                onClick={startNewShow}
+                disabled={!isAdmin || isPending || isConfirming}
+                className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded"
+              >
+                {isPending ? 'Creating...' : isConfirming ? 'Confirming...' : 'Create Show'}
+              </button>
+            </div>
+
+            {/* Begin Show */}
+            <div className="p-4 border border-gray-200 rounded">
+              <h3 className="font-semibold mb-2">Start Playing</h3>
+              <p className="text-sm text-gray-600 mb-4">Begin the next show (make it active).</p>
+              <button
+                onClick={beginShow}
+                disabled={!isAdmin || !nextShowId || isPending || isConfirming}
+                className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded"
+              >
+                {isPending ? 'Starting...' : isConfirming ? 'Confirming...' : 'Start Playing'}
+              </button>
+            </div>
+
+            {/* End Current Show */}
+            <div className="p-4 border border-gray-200 rounded">
+              <h3 className="font-semibold mb-2">End Current Show</h3>
+              <p className="text-sm text-gray-600 mb-4">End the current show and set winner.</p>
+              <div className="mb-4">
+                <input
+                  type="number"
+                  placeholder="Winner Agent ID"
+                  value={winnerAgentId}
+                  onChange={(e) => setWinnerAgentId(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded"
+                />
+              </div>
+              <button
+                onClick={endCurrentShow}
+                disabled={!isAdmin || !winnerAgentId || isPending || isConfirming}
+                className="w-full bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded"
+              >
+                {isPending ? 'Ending...' : isConfirming ? 'Confirming...' : 'End Show'}
+              </button>
+            </div>
+
+            {/* Kill Agent */}
+            <div className="p-4 border border-gray-200 rounded">
+              <h3 className="font-semibold mb-2">Kill Agent</h3>
+              <p className="text-sm text-gray-600 mb-4">Remove an agent from a show.</p>
+              <div className="mb-4 space-y-2">
+                <input
+                  type="number"
+                  placeholder="Show ID"
+                  value={killShowId}
+                  onChange={(e) => setKillShowId(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded"
+                />
+                <input
+                  type="number"
+                  placeholder="Agent ID"
+                  value={killAgentId}
+                  onChange={(e) => setKillAgentId(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded"
+                />
+              </div>
+              <button
+                onClick={killAgent}
+                disabled={!isAdmin || !killAgentId || !killShowId}
+                className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded"
+              >
+                Kill Agent
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* CRT Monitor Bezel - At edges of screen */}
-      <div className="absolute inset-0 pointer-events-none">
-        {/* Top Bezel */}
-        <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-gray-800 to-gray-900"></div>
-        {/* Bottom Bezel */}
-        <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-800 to-gray-900"></div>
-        {/* Left Bezel */}
-        <div className="absolute top-0 bottom-0 left-0 w-8 bg-gradient-to-r from-gray-800 to-gray-900"></div>
-        {/* Right Bezel */}
-        <div className="absolute top-0 bottom-0 right-0 w-8 bg-gradient-to-l from-gray-800 to-gray-900"></div>
-      </div>
-
-      {/* Custom CSS for animations */}
-      <style jsx>{`
-        @keyframes scanline {
-          0% { transform: translateY(-100vh); }
-          100% { transform: translateY(100vh); }
-        }
-        
-        @keyframes noise {
-          0% { transform: translate(0, 0); }
-          25% { transform: translate(-2px, -2px); }
-          50% { transform: translate(2px, -2px); }
-          75% { transform: translate(-2px, 2px); }
-          100% { transform: translate(2px, 2px); }
-        }
-        
-        @keyframes screenFlicker {
-          0%, 100% { opacity: 0; }
-          50% { opacity: 0.05; }
-        }
-      `}</style>
     </div>
   );
 }

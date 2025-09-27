@@ -219,7 +219,7 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
      * @dev Start a new show (called manually by owner)
      */
     function startShow() external onlyOwner whenNotPaused {
-        require(currentShowId == 0 || shows[currentShowId].isEnded, "Current show is still active");
+        require(nextShowId == 0, "Next show already exists");
         _startNewShow();
     }
     
@@ -230,7 +230,7 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
         shows[nextShowId].showId = nextShowId;
         shows[nextShowId].startTime = block.timestamp;
         shows[nextShowId].endTime = block.timestamp + SHOW_DURATION;
-        shows[nextShowId].isActive = true;
+        shows[nextShowId].isActive = false; // Show is in preparation phase, not active yet
         shows[nextShowId].isEnded = false;
         shows[nextShowId].entryFee = 0.01 ether; // Default entry fee
         
@@ -247,6 +247,9 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
         
         currentShowId = nextShowId;
         nextShowId = 0; // Clear next show since it's now current
+        
+        // Set the show as active when it begins
+        shows[currentShowId].isActive = true;
         
         emit ShowStarted(currentShowId, shows[currentShowId].startTime, shows[currentShowId].endTime, shows[currentShowId].entryFee);
     }

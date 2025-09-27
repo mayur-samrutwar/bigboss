@@ -163,8 +163,8 @@ export default function App() {
 
   // Update show info when contract data changes
   useEffect(() => {
-    if (nextShowData) {
-      const [showId, startTime, endTime, isActive, entryFee, totalPrize, participantCount] = nextShowData;
+    if (currentShowData) {
+      const [showId, startTime, endTime, isActive, entryFee, totalPrize, participantCount] = currentShowData;
       setShowInfo({
         showId: Number(showId),
         startTime: Number(startTime) * 1000,
@@ -175,7 +175,7 @@ export default function App() {
         participantCount: Number(participantCount)
       });
     }
-  }, [nextShowData]);
+  }, [currentShowData]);
 
   // Update participants when show participants data changes
   useEffect(() => {
@@ -279,8 +279,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Wallet Connect Button - Top Right */}
-      <div className="absolute top-4 right-4 z-10">
+      {/* Wallet Connect Button - Bottom Right */}
+      <div className="absolute bottom-4 right-4 z-10">
         <WalletConnect />
       </div>
 
@@ -652,7 +652,7 @@ export default function App() {
       </div>
 
       {/* Sidebar Toggle Buttons */}
-      <div className="absolute top-4 left-4 flex flex-col space-y-2 z-10">
+      <div className="absolute top-4 right-4 flex flex-col space-y-2 z-10">
         <button
           onClick={() => setSidebarOpen(true)}
           className="bg-green-500 hover:bg-green-400 text-black font-bold py-2 px-4 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"

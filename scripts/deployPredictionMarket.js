@@ -7,7 +7,7 @@ async function main() {
   const PredictionMarket = await ethers.getContractFactory("PredictionMarket");
   
   // Get the ShowContract address from environment
-  const showContractAddress = process.env.SHOW_CONTRACT_ADDRESS || "0xa299bfcACf2C2414573df56dc4f57D76Dde65112";
+  const showContractAddress = process.env.SHOW_CONTRACT_ADDRESS || "0xA658D520B9EF89c7996bd6e73c232D0feAa076A4";
   
   console.log(`📋 ShowContract address: ${showContractAddress}`);
   

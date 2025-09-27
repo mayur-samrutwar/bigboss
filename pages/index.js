@@ -74,17 +74,17 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Wallet Connect Button - Top Right */}
+        <div className="absolute top-6 right-6 z-30">
+          <WalletConnect />
+        </div>
+
         {/* Content Area */}
         <div className="relative z-10 w-full h-full flex items-center justify-center">
           <div className="text-center">
             {/* Welcome Text */}
             <div className="text-green-400 font-mono text-3xl mb-8 animate-pulse">
               WELCOME TO BIGBOSS
-            </div>
-            
-            {/* Wallet Connect Button */}
-            <div className="mb-6">
-              <WalletConnect />
             </div>
             
             {/* Button Container */}

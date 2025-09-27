@@ -1,0 +1,518 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+
+/**
+ * @title ShowContract
+ * @dev A comprehensive show management system with agent participation and voting
+ * Features:
+ * - 12-hour show cycles with automatic management
+ * - Agent registration and parameter management
+ * - Voting system with entry fees
+ * - Prize distribution with platform fees
+ * - AI command system for agent manipulation
+ */
+contract ShowContract is ReentrancyGuard, Ownable, Pausable {
+    
+    // Events
+    event ShowStarted(uint256 indexed showId, uint256 startTime, uint256 endTime, uint256 entryFee);
+    event ShowEnded(uint256 indexed showId, uint256 winnerAgentId, uint256 totalPrize);
+    event AgentRegistered(uint256 indexed agentId, address indexed owner, string name, uint256[] initialParams);
+    event AgentParticipated(uint256 indexed showId, uint256 indexed agentId, address indexed owner);
+    event AgentParametersUpdated(uint256 indexed agentId, uint256[] newParams, address indexed updater);
+    event AgentKilled(uint256 indexed showId, uint256 indexed agentId, address indexed killer);
+    event VoteCast(uint256 indexed showId, uint256 indexed agentId, address indexed voter, uint256 amount);
+    event PrizeClaimed(uint256 indexed showId, uint256 indexed agentId, address indexed winner, uint256 amount);
+    event EntryFeeUpdated(uint256 indexed showId, uint256 newEntryFee);
+    event ShowCancelled(uint256 indexed showId, uint256 refundAmount);
+    
+    // Constants
+    uint256 public constant SHOW_DURATION = 30 minutes;
+    uint256 public constant MAX_PARTICIPANTS_PER_SHOW = 10;
+    uint256 public constant PLATFORM_FEE_PERCENTAGE = 10; // 10% platform fee
+    uint256 public constant VOTE_FEE = 0.01 ether; // Fee for each vote
+    uint256 public constant MIN_ENTRY_FEE = 0.001 ether;
+    uint256 public constant MAX_ENTRY_FEE = 10 ether;
+    
+    // Structs
+    struct Show {
+        uint256 showId;
+        uint256 startTime;
+        uint256 endTime;
+        bool isActive;
+        bool isEnded;
+        uint256 entryFee;
+        uint256 totalPrize;
+        uint256 winnerAgentId;
+        uint256[] participatingAgents;
+        mapping(uint256 => uint256) agentVotes; // agentId => total votes
+        mapping(address => mapping(uint256 => uint256)) userVotes; // user => agentId => votes
+        mapping(address => bool) hasClaimedPrize;
+        address[] participants;
+    }
+    
+    struct Agent {
+        uint256 agentId;
+        address owner;
+        string name;
+        uint256[] parameters;
+        bool isActive;
+        bool isAlive;
+        uint256 createdAt;
+        uint256 lastUpdated;
+    }
+    
+    // State variables
+    mapping(uint256 => Show) public shows;
+    mapping(uint256 => Agent) public agents;
+    mapping(address => uint256[]) public userAgents; // user => agentIds
+    mapping(address => bool) public authorizedAI; // AI addresses that can update agents
+    
+    uint256 public showCounter;
+    uint256 public agentCounter;
+    uint256 public currentShowId;
+    uint256 public totalPlatformFees;
+    
+    // Modifiers
+    modifier showExists(uint256 _showId) {
+        require(_showId > 0 && _showId <= showCounter, "Show does not exist");
+        _;
+    }
+    
+    modifier showActive(uint256 _showId) {
+        require(shows[_showId].isActive && !shows[_showId].isEnded, "Show is not active");
+        _;
+    }
+    
+    modifier showEnded(uint256 _showId) {
+        require(shows[_showId].isEnded, "Show has not ended yet");
+        _;
+    }
+    
+    modifier agentExists(uint256 _agentId) {
+        require(_agentId > 0 && _agentId <= agentCounter, "Agent does not exist");
+        _;
+    }
+    
+    modifier agentActive(uint256 _agentId) {
+        require(agents[_agentId].isActive, "Agent is not active");
+        _;
+    }
+    
+    modifier agentAlive(uint256 _agentId) {
+        require(agents[_agentId].isAlive, "Agent is dead");
+        _;
+    }
+    
+    modifier onlyAI() {
+        require(authorizedAI[msg.sender] || msg.sender == owner(), "Only authorized AI or owner");
+        _;
+    }
+    
+    modifier validEntryFee(uint256 _fee) {
+        require(_fee >= MIN_ENTRY_FEE && _fee <= MAX_ENTRY_FEE, "Invalid entry fee");
+        _;
+    }
+    
+    /**
+     * @dev Start a new show (called manually by owner)
+     */
+    function startShow() external onlyOwner whenNotPaused {
+        require(currentShowId == 0 || shows[currentShowId].isEnded, "Current show is still active");
+        _startNewShow();
+    }
+    
+    function _startNewShow() internal {
+        showCounter++;
+        currentShowId = showCounter;
+        
+        shows[currentShowId].showId = currentShowId;
+        shows[currentShowId].startTime = block.timestamp;
+        shows[currentShowId].endTime = block.timestamp + SHOW_DURATION;
+        shows[currentShowId].isActive = true;
+        shows[currentShowId].isEnded = false;
+        shows[currentShowId].entryFee = 0.01 ether; // Default entry fee
+        
+        emit ShowStarted(currentShowId, shows[currentShowId].startTime, shows[currentShowId].endTime, shows[currentShowId].entryFee);
+    }
+    
+    /**
+     * @dev End the current show and determine winner
+     * @param _winnerAgentId ID of the winning agent
+     */
+    function endShow(uint256 _winnerAgentId) external onlyOwner showExists(currentShowId) showActive(currentShowId) agentExists(_winnerAgentId) {
+        require(block.timestamp >= shows[currentShowId].endTime, "Show has not ended yet");
+        require(shows[currentShowId].participatingAgents.length > 0, "No agents participated");
+        
+        shows[currentShowId].isActive = false;
+        shows[currentShowId].isEnded = true;
+        shows[currentShowId].winnerAgentId = _winnerAgentId;
+        
+        // Calculate platform fee
+        uint256 platformFee = (shows[currentShowId].totalPrize * PLATFORM_FEE_PERCENTAGE) / 100;
+        totalPlatformFees += platformFee;
+        
+        emit ShowEnded(currentShowId, _winnerAgentId, shows[currentShowId].totalPrize);
+        
+        // Reset current show
+        currentShowId = 0;
+    }
+    
+    /**
+     * @dev Get current active show information
+     */
+    function getCurrentShow() external view returns (
+        uint256 showId,
+        uint256 startTime,
+        uint256 endTime,
+        bool isActive,
+        uint256 entryFee,
+        uint256 totalPrize,
+        uint256 participantCount
+    ) {
+        if (currentShowId == 0) {
+            return (0, 0, 0, false, 0, 0, 0);
+        }
+        
+        Show storage show = shows[currentShowId];
+        return (
+            show.showId,
+            show.startTime,
+            show.endTime,
+            show.isActive,
+            show.entryFee,
+            show.totalPrize,
+            show.participatingAgents.length
+        );
+    }
+    
+    /**
+     * @dev Get winner of a specific show
+     * @param _showId ID of the show
+     */
+    function getWinnerOfShow(uint256 _showId) external view showExists(_showId) showEnded(_showId) returns (
+        uint256 winnerAgentId,
+        string memory winnerName,
+        uint256 totalVotes,
+        uint256 prizeAmount
+    ) {
+        Show storage show = shows[_showId];
+        Agent storage winner = agents[show.winnerAgentId];
+        
+        uint256 platformFee = (show.totalPrize * PLATFORM_FEE_PERCENTAGE) / 100;
+        uint256 netPrize = show.totalPrize - platformFee;
+        
+        return (
+            show.winnerAgentId,
+            winner.name,
+            show.agentVotes[show.winnerAgentId],
+            netPrize
+        );
+    }
+    
+    /**
+     * @dev Get reward amount for a specific show
+     * @param _showId ID of the show
+     */
+    function getRewardOfShow(uint256 _showId) external view showExists(_showId) showEnded(_showId) returns (uint256) {
+        Show storage show = shows[_showId];
+        uint256 platformFee = (show.totalPrize * PLATFORM_FEE_PERCENTAGE) / 100;
+        return show.totalPrize - platformFee;
+    }
+    
+    /**
+     * @dev Register a new agent
+     * @param _name Name of the agent
+     * @param _parameters Initial parameters array
+     */
+    function registerAgent(
+        string memory _name,
+        uint256[] memory _parameters
+    ) external whenNotPaused {
+        require(bytes(_name).length > 0, "Agent name cannot be empty");
+        require(_parameters.length > 0, "Agent must have parameters");
+        require(_parameters.length <= 20, "Too many parameters");
+        
+        agentCounter++;
+        uint256 agentId = agentCounter;
+        
+        agents[agentId] = Agent({
+            agentId: agentId,
+            owner: msg.sender,
+            name: _name,
+            parameters: _parameters,
+            isActive: true,
+            isAlive: true,
+            createdAt: block.timestamp,
+            lastUpdated: block.timestamp
+        });
+        
+        userAgents[msg.sender].push(agentId);
+        
+        emit AgentRegistered(agentId, msg.sender, _name, _parameters);
+    }
+    
+    /**
+     * @dev Participate in a show with an agent
+     * @param _showId ID of the show
+     * @param _agentId ID of the agent
+     */
+    function participateInShow(
+        uint256 _showId,
+        uint256 _agentId
+    ) external payable nonReentrant showExists(_showId) showActive(_showId) agentExists(_agentId) agentActive(_agentId) agentAlive(_agentId) {
+        require(agents[_agentId].owner == msg.sender, "Not the agent owner");
+        require(block.timestamp < shows[_showId].endTime, "Show has ended");
+        require(shows[_showId].participatingAgents.length < MAX_PARTICIPANTS_PER_SHOW, "Show is full");
+        require(msg.value == shows[_showId].entryFee, "Incorrect entry fee");
+        require(!_isAgentParticipating(_showId, _agentId), "Agent already participating");
+        
+        shows[_showId].participatingAgents.push(_agentId);
+        shows[_showId].totalPrize += msg.value;
+        shows[_showId].participants.push(msg.sender);
+        
+        emit AgentParticipated(_showId, _agentId, msg.sender);
+    }
+    
+    /**
+     * @dev Update agent parameters (AI or owner only)
+     * @param _agentId ID of the agent
+     * @param _newParameters New parameters array
+     */
+    function updateAgentParams(
+        uint256 _agentId,
+        uint256[] memory _newParameters
+    ) external agentExists(_agentId) agentActive(_agentId) agentAlive(_agentId) {
+        require(
+            agents[_agentId].owner == msg.sender || authorizedAI[msg.sender] || msg.sender == owner(),
+            "Not authorized to update agent"
+        );
+        require(_newParameters.length > 0, "Parameters cannot be empty");
+        require(_newParameters.length <= 20, "Too many parameters");
+        
+        agents[_agentId].parameters = _newParameters;
+        agents[_agentId].lastUpdated = block.timestamp;
+        
+        emit AgentParametersUpdated(_agentId, _newParameters, msg.sender);
+    }
+    
+    /**
+     * @dev Kill an agent (AI only)
+     * @param _showId ID of the show
+     * @param _agentId ID of the agent to kill
+     */
+    function killAgent(
+        uint256 _showId,
+        uint256 _agentId
+    ) external onlyAI showExists(_showId) showActive(_showId) agentExists(_agentId) agentActive(_agentId) agentAlive(_agentId) {
+        require(_isAgentParticipating(_showId, _agentId), "Agent not participating in this show");
+        
+        agents[_agentId].isAlive = false;
+        
+        emit AgentKilled(_showId, _agentId, msg.sender);
+    }
+    
+    /**
+     * @dev Vote for an agent in a show
+     * @param _showId ID of the show
+     * @param _agentId ID of the agent to vote for
+     */
+    function voteForAgent(
+        uint256 _showId,
+        uint256 _agentId
+    ) external payable nonReentrant showExists(_showId) showActive(_showId) agentExists(_agentId) agentActive(_agentId) agentAlive(_agentId) {
+        require(block.timestamp < shows[_showId].endTime, "Show has ended");
+        require(msg.value == VOTE_FEE, "Incorrect vote fee");
+        require(_isAgentParticipating(_showId, _agentId), "Agent not participating in this show");
+        
+        shows[_showId].agentVotes[_agentId]++;
+        shows[_showId].userVotes[msg.sender][_agentId]++;
+        shows[_showId].totalPrize += msg.value;
+        
+        emit VoteCast(_showId, _agentId, msg.sender, msg.value);
+    }
+    
+    /**
+     * @dev Claim prize for winning agent
+     * @param _showId ID of the show
+     */
+    function claimPrize(uint256 _showId) external nonReentrant showExists(_showId) showEnded(_showId) {
+        Show storage show = shows[_showId];
+        require(show.winnerAgentId > 0, "No winner determined");
+        require(agents[show.winnerAgentId].owner == msg.sender, "Not the winner's owner");
+        require(!show.hasClaimedPrize[msg.sender], "Prize already claimed");
+        
+        uint256 platformFee = (show.totalPrize * PLATFORM_FEE_PERCENTAGE) / 100;
+        uint256 netPrize = show.totalPrize - platformFee;
+        
+        require(netPrize > 0, "No prize to claim");
+        require(address(this).balance >= netPrize, "Insufficient contract balance");
+        
+        show.hasClaimedPrize[msg.sender] = true;
+        
+        (bool success, ) = payable(msg.sender).call{value: netPrize}("");
+        require(success, "Transfer failed");
+        
+        emit PrizeClaimed(_showId, show.winnerAgentId, msg.sender, netPrize);
+    }
+    
+    /**
+     * @dev Update entry fee for current show (owner only)
+     * @param _newEntryFee New entry fee
+     */
+    function updateEntryFee(uint256 _newEntryFee) external onlyOwner validEntryFee(_newEntryFee) {
+        require(currentShowId > 0 && shows[currentShowId].isActive, "No active show");
+        require(shows[currentShowId].participatingAgents.length == 0, "Cannot change fee after participants joined");
+        
+        shows[currentShowId].entryFee = _newEntryFee;
+        
+        emit EntryFeeUpdated(currentShowId, _newEntryFee);
+    }
+    
+    /**
+     * @dev Authorize AI address (owner only)
+     * @param _aiAddress AI address to authorize
+     */
+    function authorizeAI(address _aiAddress) external onlyOwner {
+        require(_aiAddress != address(0), "Invalid AI address");
+        authorizedAI[_aiAddress] = true;
+    }
+    
+    /**
+     * @dev Revoke AI authorization (owner only)
+     * @param _aiAddress AI address to revoke
+     */
+    function revokeAI(address _aiAddress) external onlyOwner {
+        authorizedAI[_aiAddress] = false;
+    }
+    
+    /**
+     * @dev Get agent information
+     * @param _agentId ID of the agent
+     */
+    function getAgentInfo(uint256 _agentId) external view agentExists(_agentId) returns (
+        uint256 agentId,
+        address owner,
+        string memory name,
+        uint256[] memory parameters,
+        bool isActive,
+        bool isAlive,
+        uint256 createdAt,
+        uint256 lastUpdated
+    ) {
+        Agent storage agent = agents[_agentId];
+        return (
+            agent.agentId,
+            agent.owner,
+            agent.name,
+            agent.parameters,
+            agent.isActive,
+            agent.isAlive,
+            agent.createdAt,
+            agent.lastUpdated
+        );
+    }
+    
+    /**
+     * @dev Get show participants
+     * @param _showId ID of the show
+     */
+    function getShowParticipants(uint256 _showId) external view showExists(_showId) returns (
+        uint256[] memory agentIds,
+        address[] memory participantAddresses
+    ) {
+        return (shows[_showId].participatingAgents, shows[_showId].participants);
+    }
+    
+    /**
+     * @dev Get user's agents
+     * @param _user User address
+     */
+    function getUserAgents(address _user) external view returns (uint256[] memory) {
+        return userAgents[_user];
+    }
+    
+    /**
+     * @dev Check if agent is participating in show
+     * @param _showId ID of the show
+     * @param _agentId ID of the agent
+     */
+    function _isAgentParticipating(uint256 _showId, uint256 _agentId) internal view returns (bool) {
+        uint256[] memory participatingAgents = shows[_showId].participatingAgents;
+        for (uint256 i = 0; i < participatingAgents.length; i++) {
+            if (participatingAgents[i] == _agentId) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * @dev Withdraw platform fees (owner only)
+     */
+    function withdrawPlatformFees() external onlyOwner {
+        require(totalPlatformFees > 0, "No fees to withdraw");
+        require(address(this).balance >= totalPlatformFees, "Insufficient balance");
+        
+        uint256 amount = totalPlatformFees;
+        totalPlatformFees = 0;
+        
+        (bool success, ) = payable(owner()).call{value: amount}("");
+        require(success, "Withdrawal failed");
+    }
+    
+    /**
+     * @dev Pause the contract (owner only)
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+    
+    /**
+     * @dev Unpause the contract (owner only)
+     */
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+    
+    /**
+     * @dev Get contract balance
+     */
+    function getContractBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+    
+    /**
+     * @dev Emergency withdraw (owner only) - use only in extreme cases
+     */
+    function emergencyWithdraw() external onlyOwner {
+        require(paused(), "Contract must be paused");
+        (bool success, ) = payable(owner()).call{value: address(this).balance}("");
+        require(success, "Emergency withdrawal failed");
+    }
+    
+    /**
+     * @dev Check if show can be started (for automation)
+     */
+    function canStartNewShow() external view returns (bool) {
+        return currentShowId == 0 || shows[currentShowId].isEnded;
+    }
+    
+    /**
+     * @dev Get time until current show ends
+     */
+    function getTimeUntilShowEnds() external view returns (uint256) {
+        if (currentShowId == 0 || !shows[currentShowId].isActive) {
+            return 0;
+        }
+        
+        if (block.timestamp >= shows[currentShowId].endTime) {
+            return 0;
+        }
+        
+        return shows[currentShowId].endTime - block.timestamp;
+    }
+}

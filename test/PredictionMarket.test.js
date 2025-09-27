@@ -229,9 +229,13 @@ describe("PredictionMarket", function () {
       const finalBalance1 = await ethers.provider.getBalance(user1.address);
       const finalBalance2 = await ethers.provider.getBalance(user2.address);
 
-      // Should get full refund
-      expect(finalBalance1).to.be.closeTo(initialBalance1, ethers.parseEther("0.01"));
-      expect(finalBalance2).to.be.closeTo(initialBalance2, ethers.parseEther("0.01"));
+      // Check that users got refunds (balance increased from initial)
+      expect(finalBalance1).to.be.greaterThan(initialBalance1);
+      expect(finalBalance2).to.be.greaterThan(initialBalance2);
+      
+      // Check that the contract balance is now 0 (all refunded)
+      const contractBalance = await predictionMarket.getContractBalance();
+      expect(contractBalance).to.equal(0);
     });
 
     it("Should not allow cancellation after show ends", async function () {

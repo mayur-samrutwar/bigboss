@@ -20,12 +20,13 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@nomicfoundation/hardhat-ethers": "^3.0.5",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@openzeppelin/contracts": "^5.4.0",
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
-    "hardhat": "^3.0.6",
+    "hardhat": "^2.22.15",
     "tailwindcss": "^4"
   }
 }

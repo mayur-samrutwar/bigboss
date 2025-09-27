@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import WalletConnect from '../components/WalletConnect';
-import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS } from '../abi/ShowContract';
+import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS } from '../lib/contract';
 
 export default function Admin() {
   const router = useRouter();
@@ -58,6 +58,15 @@ export default function Admin() {
 
   // Check if current user is admin
   const isAdmin = address && contractOwner && address.toLowerCase() === contractOwner.toLowerCase();
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 Admin Debug Info:');
+    console.log('Connected Address:', address);
+    console.log('Contract Owner:', contractOwner);
+    console.log('Is Admin:', isAdmin);
+    console.log('Is Connected:', isConnected);
+  }, [address, contractOwner, isAdmin, isConnected]);
 
   const startNewShow = async () => {
     if (!isAdmin) {
@@ -259,6 +268,15 @@ export default function Admin() {
                     ✗ ADMIN ACCESS DENIED - Only contract owner can perform admin actions
                   </div>
                 )}
+                
+                {/* Debug Info */}
+                <div className="bg-gray-900/20 border border-gray-500 text-gray-400 font-mono p-4 rounded mt-4 text-sm">
+                  <div>🔍 DEBUG INFO:</div>
+                  <div>Connected Address: {address || 'Not connected'}</div>
+                  <div>Contract Owner: {contractOwner || 'Loading...'}</div>
+                  <div>Is Admin: {isAdmin ? 'YES' : 'NO'}</div>
+                  <div>Contract Address: {SHOW_CONTRACT_ADDRESS}</div>
+                </div>
               </div>
             )}
 

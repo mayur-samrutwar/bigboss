@@ -103,7 +103,7 @@ export default function Home() {
 
               {/* Participate in Next Button */}
               <button
-                onClick={() => router.push('/register')}
+                onClick={() => router.push('/nextshow')}
                 className="bg-blue-500 hover:bg-blue-400 text-white font-bold py-4 px-8 rounded-lg border-2 border-blue-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50"
                 style={{
                   fontFamily: 'monospace',

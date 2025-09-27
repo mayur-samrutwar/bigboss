@@ -1,11 +1,12 @@
 import WalletConnect from '../components/WalletConnect';
 import Character from '../components/Character';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS } from '../abi/ShowContract';
-import { PREDICTION_MARKET_ABI, PREDICTION_MARKET_ADDRESS } from '../abi/PredictionMarket';
+import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS, PREDICTION_MARKET_ABI, PREDICTION_MARKET_ADDRESS } from '../lib/contract';
 
 export default function App() {
+  const router = useRouter();
   const { address, isConnected } = useAccount();
   const [scrollPosition, setScrollPosition] = useState(0);
   const [imageWidth, setImageWidth] = useState(0);
@@ -672,6 +673,17 @@ export default function App() {
           }}
         >
           VOTING
+        </button>
+
+        <button
+          onClick={() => router.push('/nextshow')}
+          className="bg-purple-500 hover:bg-purple-400 text-white font-bold py-2 px-4 rounded-lg border-2 border-purple-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-purple-500/50"
+          style={{
+            fontFamily: 'monospace',
+            textShadow: '0 0 10px #8000ff'
+          }}
+        >
+          NEXT SHOW
         </button>
       </div>
 

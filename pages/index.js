@@ -37,6 +37,43 @@ export default function Home() {
           ))}
         </div>
 
+        {/* Salman Khan Stickers - Near Title */}
+        <div className="absolute inset-0 pointer-events-none z-20">
+          {/* Salman 1 - Left of Title */}
+          <div 
+            className="absolute"
+            style={{
+              top: '35%',
+              left: '15%',
+              animation: 'wobble 2s ease-in-out infinite',
+              animationDelay: '0s'
+            }}
+          >
+            <img 
+              src="/salman1.png" 
+              alt="Salman Khan" 
+              className="w-48 h-auto opacity-90 hover:opacity-100 transition-opacity duration-300"
+            />
+          </div>
+          
+          {/* Salman 2 - Right of Title */}
+          <div 
+            className="absolute"
+            style={{
+              top: '35%',
+              right: '15%',
+              animation: 'wobble 2.5s ease-in-out infinite',
+              animationDelay: '1s'
+            }}
+          >
+            <img 
+              src="/salman2.png" 
+              alt="Salman Khan" 
+              className="w-44 h-auto opacity-90 hover:opacity-100 transition-opacity duration-300"
+            />
+          </div>
+        </div>
+
         {/* Content Area */}
         <div className="relative z-10 w-full h-full flex items-center justify-center">
           <div className="text-center">
@@ -61,7 +98,7 @@ export default function Home() {
                   textShadow: '0 0 10px #00ff00'
                 }}
               >
-                ENTER ROOM
+                ENTER SHOW
               </button>
 
               {/* Participate in Next Button */}
@@ -75,6 +112,7 @@ export default function Home() {
               >
                 PARTICIPATE IN NEXT
               </button>
+
             </div>
           </div>
         </div>
@@ -120,6 +158,12 @@ export default function Home() {
         @keyframes screenFlicker {
           0%, 100% { opacity: 0; }
           50% { opacity: 0.05; }
+        }
+        
+        @keyframes wobble {
+          0%, 100% { transform: rotate(0deg); }
+          25% { transform: rotate(2deg); }
+          75% { transform: rotate(-2deg); }
         }
       `}</style>
     </div>

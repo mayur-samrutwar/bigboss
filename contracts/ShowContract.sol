@@ -277,6 +277,61 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
     }
     
     /**
+     * @dev Check show status and automatically end if time has passed
+     * @param _showId ID of the show to check
+     */
+    function checkStatus(uint256 _showId) external onlyOwner showExists(_showId) {
+        Show storage show = shows[_showId];
+        
+        // Check if show is still active but time has passed
+        if (show.isActive && block.timestamp >= show.endTime) {
+            require(show.participatingAgents.length > 0, "No agents participated");
+            
+            // Find the last remaining alive agent
+            uint256 winnerAgentId = 0;
+            for (uint256 i = 0; i < show.participatingAgents.length; i++) {
+                uint256 agentId = show.participatingAgents[i];
+                if (agents[agentId].isAlive) {
+                    winnerAgentId = agentId;
+                    break;
+                }
+            }
+            
+            require(winnerAgentId > 0, "No alive agents found");
+            
+            // End the show with the winner
+            show.isActive = false;
+            show.isEnded = true;
+            show.winnerAgentId = winnerAgentId;
+            
+            // Calculate platform fee
+            uint256 platformFee = (show.totalPrize * PLATFORM_FEE_PERCENTAGE) / 100;
+            totalPlatformFees += platformFee;
+            
+            // Calculate net prize for winner
+            uint256 netPrize = show.totalPrize - platformFee;
+            
+            // Transfer prize to winner's owner
+            if (netPrize > 0 && address(this).balance >= netPrize) {
+                address winnerOwner = agents[winnerAgentId].owner;
+                show.hasClaimedPrize[winnerOwner] = true;
+                
+                (bool success, ) = payable(winnerOwner).call{value: netPrize}("");
+                require(success, "Prize transfer failed");
+                
+                emit PrizeClaimed(_showId, winnerAgentId, winnerOwner, netPrize);
+            }
+            
+            emit ShowEnded(_showId, winnerAgentId, show.totalPrize);
+            
+            // Reset current show if this was the current show
+            if (_showId == currentShowId) {
+                currentShowId = 0;
+            }
+        }
+    }
+    
+    /**
      * @dev Get current active show information
      */
     function getCurrentShow() external view returns (

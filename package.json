@@ -6,7 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "schedule": "node scripts/schedule.js",
+    "schedule:start": "node scripts/schedule.js start",
+    "schedule:stop": "node scripts/schedule.js stop",
+    "schedule:status": "node scripts/schedule.js status",
+    "schedule:config": "node scripts/schedule.js config",
+    "schedule:example": "node scripts/example.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^1.24.0",

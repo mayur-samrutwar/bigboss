@@ -35,6 +35,19 @@ const SHOW_CONTRACT_ABI = [
     "inputs": [
       {
         "internalType": "uint256",
+        "name": "_showId",
+        "type": "uint256"
+      }
+    ],
+    "name": "checkStatus",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
         "name": "_agentId",
         "type": "uint256"
       }

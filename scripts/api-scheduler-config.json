@@ -1,0 +1,97 @@
+{
+  "baseUrl": "http://localhost:3000",
+  "schedules": [
+    {
+      "name": "show-management",
+      "interval": 300000,
+      "enabled": true,
+      "description": "Runs AI decision and execution every 5 minutes",
+      "apiCalls": [
+        {
+          "endpoint": "/api/manageShow",
+          "method": "POST",
+          "body": {
+            "showId": 1,
+            "action": "get_ai_decision"
+          },
+          "retryOnError": true,
+          "maxRetries": 3,
+          "description": "Get AI decision for show"
+        },
+        {
+          "endpoint": "/api/manageShow",
+          "method": "POST",
+          "body": {
+            "showId": 1,
+            "action": "execute_ai_action"
+          },
+          "retryOnError": true,
+          "maxRetries": 3,
+          "description": "Execute AI action"
+        }
+      ]
+    },
+    {
+      "name": "elimination-check",
+      "interval": 600000,
+      "enabled": true,
+      "description": "Checks for elimination every 10 minutes",
+      "apiCalls": [
+        {
+          "endpoint": "/api/manageShow",
+          "method": "POST",
+          "body": {
+            "showId": 1,
+            "action": "check_elimination"
+          },
+          "retryOnError": true,
+          "maxRetries": 2,
+          "description": "Check if elimination is needed"
+        }
+      ]
+    },
+    {
+      "name": "show-status",
+      "interval": 120000,
+      "enabled": true,
+      "description": "Gets show status every 2 minutes",
+      "apiCalls": [
+        {
+          "endpoint": "/api/manageShow",
+          "method": "POST",
+          "body": {
+            "showId": 1,
+            "action": "get_show_status"
+          },
+          "retryOnError": false,
+          "maxRetries": 1,
+          "description": "Get current show status"
+        }
+      ]
+    },
+    {
+      "name": "prize-distribution",
+      "interval": 1800000,
+      "enabled": false,
+      "description": "Distributes prizes every 30 minutes (disabled by default)",
+      "apiCalls": [
+        {
+          "endpoint": "/api/prizes/distributeAllPrizes",
+          "method": "POST",
+          "body": {
+            "showId": 1
+          },
+          "retryOnError": true,
+          "maxRetries": 2,
+          "description": "Distribute all prizes"
+        }
+      ]
+    }
+  ],
+  "globalSettings": {
+    "timeout": 30000,
+    "logLevel": "info",
+    "saveLogs": true,
+    "logFile": "api-scheduler.log"
+  }
+}

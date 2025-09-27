@@ -100,6 +100,7 @@ export default async function handler(req, res) {
     let status = 'UNKNOWN';
     let shouldProcess = false;
     let reason = '';
+    let autoEndResult = null;
 
     if (!isActive) {
       status = 'ENDED';
@@ -119,11 +120,40 @@ export default async function handler(req, res) {
       reason = `${aliveCount} participants still alive`;
     }
 
+    // Auto-end show if time has passed and autoProcess is true
+    if (autoProcess && timeHasPassed && isActive) {
+      try {
+        console.log(`⏰ Auto-ending show ${showId} - time has passed`);
+        const tx = await contract.checkStatus(BigInt(showId));
+        const receipt = await tx.wait();
+        
+        autoEndResult = {
+          success: true,
+          transactionHash: tx.hash,
+          blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed.toString()
+        };
+        
+        status = 'AUTO_ENDED';
+        reason = 'Show automatically ended due to time expiry';
+        shouldProcess = false;
+        
+        console.log(`✅ Show ${showId} auto-ended successfully:`, tx.hash);
+      } catch (error) {
+        console.error(`❌ Error auto-ending show ${showId}:`, error.message);
+        autoEndResult = {
+          success: false,
+          error: error.message
+        };
+      }
+    }
+
     let result = {
       success: true,
       showId: showId_.toString(),
       status,
       reason,
+      autoEndResult,
       showInfo: {
         startTime: Number(startTime),
         endTime: showEndTime,

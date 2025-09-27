@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { showId } = req.body;
+    const { showId, autoEnd = false } = req.body;
 
     if (!showId) {
       return res.status(400).json({ error: 'Show ID is required' });
@@ -55,6 +55,27 @@ export default async function handler(req, res) {
     const showEndTime = Number(endTime);
     const timeHasPassed = currentTime >= showEndTime;
 
+    // If autoEnd is false, just return status without ending
+    if (!autoEnd) {
+      return res.status(200).json({
+        success: true,
+        message: 'Show status checked',
+        showInfo: {
+          showId: showId_.toString(),
+          startTime: Number(startTime),
+          endTime: showEndTime,
+          currentTime,
+          timeRemaining: Math.max(0, showEndTime - currentTime),
+          isActive,
+          entryFee: ethers.formatEther(entryFee),
+          totalPrize: ethers.formatEther(totalPrize),
+          participantCount: Number(participantCount),
+          shouldEnd: timeHasPassed && isActive
+        }
+      });
+    }
+
+    // Only proceed with ending if autoEnd is true
     if (!timeHasPassed) {
       return res.status(400).json({
         success: false,
@@ -73,7 +94,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Call checkStatus function
+    // Call checkStatus function to end the show
     const tx = await contract.checkStatus(BigInt(showId));
     const receipt = await tx.wait();
 
@@ -83,7 +104,8 @@ export default async function handler(req, res) {
 
     res.status(200).json({
       success: true,
-      message: 'Show status checked and processed',
+      message: 'Show automatically ended',
+      action: 'ended',
       transaction: {
         hash: tx.hash,
         blockNumber: receipt.blockNumber,

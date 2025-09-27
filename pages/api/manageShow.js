@@ -12,7 +12,7 @@ async function getRealShowData(showId) {
     
     // Get show participants
     const showParticipants = await contract.getShowParticipants(BigInt(showId));
-    const agentIds = showParticipants.agentIds;
+    const [agentIds, participantAddresses] = showParticipants;
     
     if (agentIds.length === 0) {
       return {
@@ -27,7 +27,7 @@ async function getRealShowData(showId) {
     // Get traits for all participating agents
     const agentsData = [];
     for (const agentId of agentIds) {
-      const agentInfo = await contract.getAgentInfo(agentId);
+      const agentInfo = await contract.getAgentInfo(BigInt(agentId));
       
       if (!Boolean(agentInfo[5])) continue; // Skip dead agents (isAlive is at index 5)
       

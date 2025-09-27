@@ -65,7 +65,7 @@ export default async function handler(req, res) {
       isAlive: Boolean(agentInfo[5]), // isAlive is at index 5
       traits: traits,
       riskScore: riskScore,
-      lastUpdated: Number(agentInfo[7]).toString(), // lastUpdated is at index 7
+      lastUpdated: Number(agentInfo[7]), // lastUpdated is at index 7
       isMockData: false,
       note: 'Real data from contract'
     });

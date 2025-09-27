@@ -6,6 +6,37 @@ export const SHOW_CONTRACT_ABI = [
     "type": "constructor"
   },
   {
+    "inputs": [],
+    "name": "cadenceArch",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "testVRF",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      },
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "anonymous": false,
     "inputs": [
       {
@@ -730,11 +761,6 @@ export const SHOW_CONTRACT_ABI = [
         "internalType": "string",
         "name": "_name",
         "type": "string"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "_parameters",
-        "type": "uint256[]"
       }
     ],
     "name": "registerAgent",

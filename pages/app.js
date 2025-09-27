@@ -1,8 +1,11 @@
 import WalletConnect from '../components/WalletConnect';
 import Character from '../components/Character';
 import { useState, useEffect } from 'react';
+import { useAccount, useReadContract } from 'wagmi';
+import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS } from '../abi/ShowContract';
 
 export default function App() {
+  const { address, isConnected } = useAccount();
   const [scrollPosition, setScrollPosition] = useState(0);
   const [imageWidth, setImageWidth] = useState(0);
   const [imageHeight, setImageHeight] = useState(0);
@@ -14,6 +17,28 @@ export default function App() {
   const [votingOpen, setVotingOpen] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [characterInfoOpen, setCharacterInfoOpen] = useState(false);
+  const [showInfo, setShowInfo] = useState(null);
+  const [participants, setParticipants] = useState([]);
+
+  // Contract read functions
+  const { data: currentShowId } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'currentShowId',
+  });
+
+  const { data: currentShowData } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'getCurrentShow',
+  });
+
+  const { data: showParticipants } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'getShowParticipants',
+    args: currentShowId ? [currentShowId] : undefined,
+  });
 
 
   const handleBuy = () => {
@@ -38,6 +63,33 @@ export default function App() {
     setSelectedCharacter(characterData);
     setCharacterInfoOpen(true);
   };
+
+  // Update show info when contract data changes
+  useEffect(() => {
+    if (currentShowData) {
+      const [showId, startTime, endTime, isActive, entryFee, totalPrize, participantCount] = currentShowData;
+      setShowInfo({
+        showId: Number(showId),
+        startTime: Number(startTime) * 1000,
+        endTime: Number(endTime) * 1000,
+        isActive,
+        entryFee: (Number(entryFee) / 1e18).toFixed(4),
+        totalPrize: (Number(totalPrize) / 1e18).toFixed(4),
+        participantCount: Number(participantCount)
+      });
+    }
+  }, [currentShowData]);
+
+  // Update participants when show participants data changes
+  useEffect(() => {
+    if (showParticipants) {
+      const [agentIds, participantAddresses] = showParticipants;
+      setParticipants(agentIds.map((id, index) => ({
+        agentId: id.toString(),
+        address: participantAddresses[index]
+      })));
+    }
+  }, [showParticipants]);
   
   // Calculate max scroll based on image dimensions (9270 × 3700)
   // Image aspect ratio: 9270/3700 = 2.5
@@ -116,6 +168,41 @@ export default function App() {
       <div className="absolute top-4 right-4 z-10">
         <WalletConnect />
       </div>
+
+      {/* Show Status Display - Top Left */}
+      {showInfo && (
+        <div className="absolute top-4 left-4 z-10 bg-black/90 backdrop-blur-sm border border-green-500 rounded-lg p-4 max-w-sm">
+          <h3 className="text-green-400 font-mono text-lg mb-2">SHOW STATUS</h3>
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-green-300 font-mono">Show ID:</span>
+              <span className="text-green-400 font-mono">{showInfo.showId}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-green-300 font-mono">Status:</span>
+              <span className={`font-mono ${showInfo.isActive ? 'text-green-400' : 'text-red-400'}`}>
+                {showInfo.isActive ? 'ACTIVE' : 'INACTIVE'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-green-300 font-mono">Participants:</span>
+              <span className="text-green-400 font-mono">{showInfo.participantCount}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-green-300 font-mono">Prize Pool:</span>
+              <span className="text-green-400 font-mono">{showInfo.totalPrize} ETH</span>
+            </div>
+            {showInfo.isActive && (
+              <div className="flex justify-between">
+                <span className="text-green-300 font-mono">Time Left:</span>
+                <span className="text-green-400 font-mono">
+                  {Math.max(0, Math.floor((showInfo.endTime - Date.now()) / 60000))}m
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Scroll Buttons */}
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 flex space-x-4">

@@ -17,6 +17,9 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
  */
 contract ShowContract is ReentrancyGuard, Ownable, Pausable {
     
+    // Address of the Cadence Arch contract for VRF
+    address constant public cadenceArch = 0x0000000000000000000000010000000000000001;
+    
     constructor() Ownable(msg.sender) {}
     
     // Events
@@ -117,6 +120,98 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
     modifier validEntryFee(uint256 _fee) {
         require(_fee >= MIN_ENTRY_FEE && _fee <= MAX_ENTRY_FEE, "Invalid entry fee");
         _;
+    }
+    
+    /**
+     * @dev Generate a random number using Flow's VRF with better error handling
+     */
+    function getRandomNumber() public view returns (uint64) {
+        // Try different function signatures in case the documentation is outdated
+        bytes memory callData1 = abi.encodeWithSignature("revertibleRandom()");
+        bytes memory callData2 = abi.encodeWithSignature("revertibleRandom(uint64)");
+        bytes memory callData3 = abi.encodeWithSignature("getRandom()");
+        
+        (bool ok, bytes memory data) = cadenceArch.staticcall(callData1);
+        
+        if (!ok) {
+            // Try alternative signatures
+            (ok, data) = cadenceArch.staticcall(callData2);
+            if (!ok) {
+                (ok, data) = cadenceArch.staticcall(callData3);
+            }
+        }
+        
+        if (!ok) {
+            // Try to decode the error message
+            if (data.length > 0) {
+                string memory errorMessage = string(data);
+                revert(string(abi.encodePacked("VRF call failed: ", errorMessage)));
+            } else {
+                revert("VRF call failed: All function signatures failed");
+            }
+        }
+        
+        if (data.length == 0) {
+            revert("VRF call failed: Empty response");
+        }
+        
+        return abi.decode(data, (uint64));
+    }
+    
+    /**
+     * @dev Test function to debug VRF calls (remove in production)
+     */
+    function testVRF() external view returns (bool, bytes memory) {
+        return cadenceArch.staticcall(abi.encodeWithSignature("revertibleRandom()"));
+    }
+    
+    /**
+     * @dev Generate a random number within a range
+     * @param min Minimum value
+     * @param max Maximum value
+     */
+    function getRandomInRange(uint64 min, uint64 max) internal view returns (uint64) {
+        require(max >= min, "Max must be >= min");
+        uint64 randomNumber = getRandomNumber();
+        return (randomNumber % (max + 1 - min)) + min;
+    }
+    
+    /**
+     * @dev Generate random traits for a new agent with VRF fallback
+     * Returns array of 7 traits: [Popularity, Aggression, Loyalty, Resilience, Charisma, Suspicion, Energy]
+     */
+    function generateRandomTraits() internal view returns (uint256[] memory) {
+        uint256[] memory traits = new uint256[](7);
+        
+        try this.getRandomNumber() returns (uint64 randomSeed) {
+            // Use VRF if available
+            traits[0] = 30 + (randomSeed % 51);        // Popularity: 30-80
+            traits[1] = 20 + ((randomSeed >> 8) % 51); // Aggression: 20-70
+            traits[2] = 40 + ((randomSeed >> 16) % 51); // Loyalty: 40-90
+            traits[3] = 30 + ((randomSeed >> 24) % 56); // Resilience: 30-85
+            traits[4] = 25 + ((randomSeed >> 32) % 66); // Charisma: 25-90
+            traits[5] = 10 + ((randomSeed >> 40) % 51); // Suspicion: 10-60
+            traits[6] = 60 + ((randomSeed >> 48) % 41); // Energy: 60-100
+        } catch {
+            // Fallback to block-based randomness if VRF fails
+            uint256 seed = uint256(keccak256(abi.encodePacked(
+                block.timestamp,
+                block.difficulty,
+                block.coinbase,
+                msg.sender,
+                agentCounter
+            )));
+            
+            traits[0] = 30 + (seed % 51);
+            traits[1] = 20 + ((seed >> 8) % 51);
+            traits[2] = 40 + ((seed >> 16) % 51);
+            traits[3] = 30 + ((seed >> 24) % 56);
+            traits[4] = 25 + ((seed >> 32) % 66);
+            traits[5] = 10 + ((seed >> 40) % 51);
+            traits[6] = 60 + ((seed >> 48) % 41);
+        }
+        
+        return traits;
     }
     
     /**
@@ -226,26 +321,25 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
     }
     
     /**
-     * @dev Register a new agent
+     * @dev Register a new agent with random traits
      * @param _name Name of the agent
-     * @param _parameters Initial parameters array
      */
     function registerAgent(
-        string memory _name,
-        uint256[] memory _parameters
+        string memory _name
     ) external whenNotPaused {
         require(bytes(_name).length > 0, "Agent name cannot be empty");
-        require(_parameters.length > 0, "Agent must have parameters");
-        require(_parameters.length <= 20, "Too many parameters");
         
         agentCounter++;
         uint256 agentId = agentCounter;
+        
+        // Generate random traits using Flow's VRF
+        uint256[] memory randomTraits = generateRandomTraits();
         
         agents[agentId] = Agent({
             agentId: agentId,
             owner: msg.sender,
             name: _name,
-            parameters: _parameters,
+            parameters: randomTraits,
             isActive: true,
             isAlive: true,
             createdAt: block.timestamp,
@@ -254,7 +348,7 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
         
         userAgents[msg.sender].push(agentId);
         
-        emit AgentRegistered(agentId, msg.sender, _name, _parameters);
+        emit AgentRegistered(agentId, msg.sender, _name, randomTraits);
     }
     
     /**

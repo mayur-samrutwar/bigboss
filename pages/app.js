@@ -1113,6 +1113,17 @@ export default function App() {
         >
           TEST WINNER
         </button>
+
+        <button
+          onClick={() => router.push('/verify')}
+          className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-2 px-4 rounded-lg border-2 border-indigo-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-indigo-500/50"
+          style={{
+            fontFamily: 'monospace',
+            textShadow: '0 0 10px #6366f1'
+          }}
+        >
+          SELF VERIFY
+        </button>
       </div>
 
       {/* Popup Components */}

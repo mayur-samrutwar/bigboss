@@ -33,14 +33,17 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
     event PrizeClaimed(uint256 indexed showId, uint256 indexed agentId, address indexed winner, uint256 amount);
     event EntryFeeUpdated(uint256 indexed showId, uint256 newEntryFee);
     event ShowCancelled(uint256 indexed showId, uint256 refundAmount);
+    event ShowTimingUpdated(uint256 newDuration);
     
     // Constants
-    uint256 public constant SHOW_DURATION = 30 minutes;
+    uint256 public SHOW_DURATION = 30 minutes; // Made configurable
     uint256 public constant MAX_PARTICIPANTS_PER_SHOW = 10;
     uint256 public constant PLATFORM_FEE_PERCENTAGE = 10; // 10% platform fee
     uint256 public constant VOTE_FEE = 0.01 ether; // Fee for each vote
     uint256 public constant MIN_ENTRY_FEE = 0.001 ether;
     uint256 public constant MAX_ENTRY_FEE = 10 ether;
+    uint256 public constant MIN_SHOW_DURATION = 5 minutes; // Minimum show duration
+    uint256 public constant MAX_SHOW_DURATION = 24 hours; // Maximum show duration
     
     // Structs
     struct Show {
@@ -588,6 +591,18 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
         shows[currentShowId].entryFee = _newEntryFee;
         
         emit EntryFeeUpdated(currentShowId, _newEntryFee);
+    }
+    
+    /**
+     * @dev Update show duration for future shows (owner only)
+     * @param _newDuration New show duration in seconds
+     */
+    function updateShowTiming(uint256 _newDuration) external onlyOwner {
+        require(_newDuration >= MIN_SHOW_DURATION && _newDuration <= MAX_SHOW_DURATION, "Invalid show duration");
+        
+        SHOW_DURATION = _newDuration;
+        
+        emit ShowTimingUpdated(_newDuration);
     }
     
     /**

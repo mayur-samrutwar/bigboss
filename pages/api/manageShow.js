@@ -1,5 +1,59 @@
 import { ethers } from 'ethers';
-import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS } from '../../../abi/ShowContract';
+import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS } from '../../lib/contract.js';
+
+// Mock show data
+const mockShowData = {
+  showId: "1",
+  agents: [
+    {
+      agentId: "1",
+      name: "Rajesh",
+      isAlive: true,
+      traits: {
+        popularity: 75,
+        aggression: 40,
+        loyalty: 60,
+        resilience: 70,
+        charisma: 80,
+        suspicion: 20,
+        energy: 90
+      },
+      riskScore: -155
+    },
+    {
+      agentId: "2", 
+      name: "Priya",
+      isAlive: true,
+      traits: {
+        popularity: 60,
+        aggression: 70,
+        loyalty: 80,
+        resilience: 60,
+        charisma: 50,
+        suspicion: 30,
+        energy: 85
+      },
+      riskScore: -10
+    },
+    {
+      agentId: "3",
+      name: "Vikram", 
+      isAlive: true,
+      traits: {
+        popularity: 50,
+        aggression: 60,
+        loyalty: 50,
+        resilience: 80,
+        charisma: 60,
+        suspicion: 40,
+        energy: 75
+      },
+      riskScore: -30
+    }
+  ],
+  aliveCount: 3,
+  totalCount: 3
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -23,123 +77,82 @@ export default async function handler(req, res) {
 
     switch (action) {
       case 'get_ai_decision':
-        // Get AI decision for next action
-        const aiResponse = await fetch(`${baseUrl}/api/ai/getDecision`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ showId })
-        });
-        
-        if (!aiResponse.ok) {
-          throw new Error('Failed to get AI decision');
-        }
-        
-        result = await aiResponse.json();
+        // Mock AI decision
+        result = {
+          success: true,
+          aiDecision: {
+            action: 'argue',
+            parameters: ['1', '2'],
+            rawResponse: 'argue(1,2)'
+          },
+          context: {
+            showId: showId,
+            totalAgents: mockShowData.aliveCount,
+            agents: mockShowData.agents,
+            context: 'general',
+            timestamp: new Date().toISOString()
+          },
+          availableAgents: mockShowData.agents.map(agent => ({
+            agentId: agent.agentId,
+            name: agent.name,
+            riskScore: agent.riskScore
+          }))
+        };
         break;
 
       case 'execute_ai_action':
-        // Get AI decision and execute it
-        const decisionResponse = await fetch(`${baseUrl}/api/ai/getDecision`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ showId })
-        });
-        
-        if (!decisionResponse.ok) {
-          throw new Error('Failed to get AI decision');
-        }
-        
-        const decision = await decisionResponse.json();
-        
-        if (!decision.success) {
-          return res.status(400).json(decision);
-        }
-        
-        // Execute the AI decision
-        const executeResponse = await fetch(`${baseUrl}/api/executeAction`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: decision.aiDecision.action,
-            parameters: decision.aiDecision.parameters,
-            showId: showId
-          })
-        });
-        
-        if (!executeResponse.ok) {
-          throw new Error('Failed to execute AI action');
-        }
-        
-        result = await executeResponse.json();
-        result.aiDecision = decision.aiDecision;
+        // Mock AI action execution
+        result = {
+          success: true,
+          message: 'Mock AI action executed successfully',
+          action: 'argue',
+          parameters: ['1', '2'],
+          toolResult: {
+            success: true,
+            message: 'Mock argue action completed',
+            winner: '1',
+            loser: '2',
+            traitChanges: {
+              agent1: {
+                aggression: '+10',
+                suspicion: '+5',
+                popularity: '+5',
+                energy: '-10'
+              },
+              agent2: {
+                aggression: '+10',
+                suspicion: '+5',
+                popularity: '-15',
+                energy: '-10'
+              }
+            }
+          },
+          aiDecision: {
+            action: 'argue',
+            parameters: ['1', '2'],
+            rawResponse: 'argue(1,2)'
+          }
+        };
         break;
 
       case 'check_elimination':
-        // Check if it's time for elimination (every 5 minutes in 30-minute show)
-        const provider = new ethers.JsonRpcProvider('https://testnet.evm.nodes.onflow.org');
-        const contract = new ethers.Contract(SHOW_CONTRACT_ADDRESS, SHOW_CONTRACT_ABI, provider);
-        
-        const showInfo = await contract.getCurrentShow();
-        const timeElapsed = Date.now() / 1000 - Number(showInfo.startTime);
-        const eliminationInterval = 5 * 60; // 5 minutes in seconds
-        
-        if (timeElapsed > 0 && timeElapsed % eliminationInterval < 60) { // Within 1 minute of elimination time
-          const eliminationResponse = await fetch(`${baseUrl}/api/elimination/calculateElimination`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ showId })
-          });
-          
-          if (eliminationResponse.ok) {
-            result = await eliminationResponse.json();
-          } else {
-            result = { success: false, message: 'No elimination needed at this time' };
-          }
-        } else {
-          result = { success: false, message: 'Not time for elimination yet' };
-        }
+        // Mock elimination check
+        result = {
+          success: false,
+          message: 'Not time for elimination yet (mock mode)',
+          mockMode: true
+        };
         break;
 
       case 'get_show_status':
-        // Get comprehensive show status
-        const statusResponse = await fetch(`${baseUrl}/api/traits/getAgentTraits?agentId=1`, {
-          method: 'GET'
-        });
-        
-        // Get all participating agents
-        const contract2 = new ethers.Contract(SHOW_CONTRACT_ADDRESS, SHOW_CONTRACT_ABI, provider);
-        const participants = await contract2.getShowParticipants(BigInt(showId));
-        
-        const agentsStatus = [];
-        for (const agentId of participants.agentIds) {
-          const agentInfo = await contract2.getAgentInfo(agentId);
-          const traits = {
-            popularity: agentInfo.parameters[0] || 50,
-            aggression: agentInfo.parameters[1] || 30,
-            loyalty: agentInfo.parameters[2] || 60,
-            resilience: agentInfo.parameters[3] || 50,
-            charisma: agentInfo.parameters[4] || 40,
-            suspicion: agentInfo.parameters[5] || 20,
-            energy: agentInfo.parameters[6] || 80
-          };
-          
-          const riskScore = (traits.suspicion + traits.aggression) - (traits.popularity + traits.charisma + traits.resilience);
-          
-          agentsStatus.push({
-            agentId: agentId.toString(),
-            name: agentInfo.name,
-            isAlive: agentInfo.isAlive,
-            traits: traits,
-            riskScore: riskScore
-          });
-        }
-        
+        // Return mock show status
         result = {
           success: true,
           showId: showId,
-          agents: agentsStatus,
-          aliveCount: agentsStatus.filter(agent => agent.isAlive).length,
-          totalCount: agentsStatus.length
+          agents: mockShowData.agents,
+          aliveCount: mockShowData.aliveCount,
+          totalCount: mockShowData.totalCount,
+          mockMode: true
         };
         break;
 
@@ -154,7 +167,9 @@ export default async function handler(req, res) {
       success: true,
       action: action,
       showId: showId,
-      result: result
+      result: result,
+      mockMode: true,
+      note: 'Using mock data - no agents deployed on contract. Run "node registerTestAgents.js" to deploy real agents.'
     });
 
   } catch (error) {
@@ -163,7 +178,8 @@ export default async function handler(req, res) {
     res.status(500).json({
       success: false,
       error: 'Failed to manage show',
-      details: error.message
+      details: error.message,
+      suggestion: 'Run "node registerTestAgents.js" to deploy test agents'
     });
   }
 }

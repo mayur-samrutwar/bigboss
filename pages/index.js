@@ -50,17 +50,32 @@ export default function Home() {
               <WalletConnect />
             </div>
             
-            {/* Enter Button */}
-            <button
-              onClick={handleEnter}
-              className="bg-green-500 hover:bg-green-400 text-black font-bold py-4 px-8 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50 crt-button"
-              style={{
-                fontFamily: 'monospace',
-                textShadow: '0 0 10px #00ff00'
-              }}
-            >
-              ENTER NOW
-            </button>
+            {/* Button Container */}
+            <div className="flex flex-col sm:flex-row gap-6 items-center justify-center">
+              {/* Enter Room Button */}
+              <button
+                onClick={handleEnter}
+                className="bg-green-500 hover:bg-green-400 text-black font-bold py-4 px-8 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50 crt-button"
+                style={{
+                  fontFamily: 'monospace',
+                  textShadow: '0 0 10px #00ff00'
+                }}
+              >
+                ENTER ROOM
+              </button>
+
+              {/* Participate in Next Button */}
+              <button
+                onClick={() => router.push('/register')}
+                className="bg-blue-500 hover:bg-blue-400 text-white font-bold py-4 px-8 rounded-lg border-2 border-blue-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50"
+                style={{
+                  fontFamily: 'monospace',
+                  textShadow: '0 0 10px #0066ff'
+                }}
+              >
+                PARTICIPATE IN NEXT
+              </button>
+            </div>
           </div>
         </div>
 

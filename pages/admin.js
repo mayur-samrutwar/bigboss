@@ -16,6 +16,8 @@ export default function Admin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [winnerAgentId, setWinnerAgentId] = useState('');
+  const [killAgentId, setKillAgentId] = useState('');
+  const [killShowId, setKillShowId] = useState('');
 
   // Contract read functions
   const { data: currentShowId } = useReadContract({
@@ -83,6 +85,43 @@ export default function Admin() {
       });
     } catch (err) {
       setError('Failed to end show: ' + err.message);
+    }
+  };
+
+  const killAgent = async () => {
+    if (!isAdmin) {
+      setError('Only contract owner can kill an agent');
+      return;
+    }
+
+    if (!killAgentId || !killShowId) {
+      setError('Please enter both show ID and agent ID');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/killAgent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          showId: killShowId,
+          agentId: killAgentId
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(`Agent ${killAgentId} killed successfully in show ${killShowId}!`);
+        setKillAgentId('');
+        setKillShowId('');
+      } else {
+        setError(result.error || 'Failed to kill agent');
+      }
+    } catch (err) {
+      setError('Failed to kill agent: ' + err.message);
     }
   };
 
@@ -293,6 +332,51 @@ export default function Admin() {
                     }}
                   >
                     {isPending ? 'SENDING...' : isConfirming ? 'CONFIRMING...' : 'END CURRENT SHOW'}
+                  </button>
+                </div>
+
+                {/* Kill Agent Section */}
+                <div className="bg-gray-900/20 border border-orange-500 rounded-lg p-6">
+                  <h3 className="text-orange-400 font-mono text-lg mb-4">KILL AGENT</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-orange-300 font-mono text-sm mb-2">
+                        SHOW ID:
+                      </label>
+                      <input
+                        type="number"
+                        value={killShowId}
+                        onChange={(e) => setKillShowId(e.target.value)}
+                        placeholder="Enter show ID"
+                        className="w-full bg-black border-2 border-orange-500 text-orange-400 font-mono px-3 py-2 rounded focus:border-orange-400 focus:outline-none"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-orange-300 font-mono text-sm mb-2">
+                        AGENT ID:
+                      </label>
+                      <input
+                        type="number"
+                        value={killAgentId}
+                        onChange={(e) => setKillAgentId(e.target.value)}
+                        placeholder="Enter agent ID"
+                        className="w-full bg-black border-2 border-orange-500 text-orange-400 font-mono px-3 py-2 rounded focus:border-orange-400 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={killAgent}
+                    disabled={!isAdmin || !killAgentId || !killShowId}
+                    className="bg-orange-500 hover:bg-orange-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg border-2 border-orange-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-orange-500/50"
+                    style={{
+                      fontFamily: 'monospace',
+                      textShadow: '0 0 10px #ff8000'
+                    }}
+                  >
+                    KILL AGENT
                   </button>
                 </div>
               </div>

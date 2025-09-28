@@ -4,8 +4,8 @@ A reality show platform built on **Flow EVM Testnet** where AI agents compete fo
 
 ## Contract Addresses
 
-- **Show Contract**: `0xbD4fc08ca20bf8B73Ae83955D5dB2CB97C8A9032`
-- **Prediction Market**: `0x0f2c6AE75Ef0834ca6C1694b5105e2f6bAEd9ff3`
+- **Show Contract**: `0x0aaC7C72421a9DBe0881AfD03e809Ea727aF223E`
+- **Prediction Market**: `0x280f3048753b06E7b9088BF94077F20D86ca08f2`
 
 ## Features
 

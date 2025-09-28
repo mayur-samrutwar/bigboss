@@ -930,44 +930,154 @@ export default function App() {
 
               {/* Stats */}
               <div className="space-y-3 mb-4">
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-purple-400 font-mono text-sm">STRENGTH</span>
-                    <span className="text-purple-300 font-mono text-sm">{selectedCharacter.strength}/10</span>
+                {selectedCharacter.loadingTraits ? (
+                  <div className="text-center text-purple-400 font-mono text-sm">
+                    Loading real agent traits...
                   </div>
-                  <div className="w-full bg-purple-900 rounded-full h-2">
-                    <div 
-                      className="bg-purple-500 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${(selectedCharacter.strength / 10) * 100}%` }}
-                    ></div>
-                  </div>
-                </div>
+                ) : selectedCharacter.traits ? (
+                  <>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-purple-400 font-mono text-sm">POPULARITY</span>
+                        <span className="text-purple-300 font-mono text-sm">{selectedCharacter.traits.popularity}/100</span>
+                      </div>
+                      <div className="w-full bg-purple-900 rounded-full h-2">
+                        <div 
+                          className="bg-purple-500 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${selectedCharacter.traits.popularity}%` }}
+                        ></div>
+                      </div>
+                    </div>
 
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-purple-400 font-mono text-sm">INTELLIGENCE</span>
-                    <span className="text-purple-300 font-mono text-sm">{selectedCharacter.intelligence}/10</span>
-                  </div>
-                  <div className="w-full bg-purple-900 rounded-full h-2">
-                    <div 
-                      className="bg-purple-500 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${(selectedCharacter.intelligence / 10) * 100}%` }}
-                    ></div>
-                  </div>
-                </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-purple-400 font-mono text-sm">AGGRESSION</span>
+                        <span className="text-purple-300 font-mono text-sm">{selectedCharacter.traits.aggression}/100</span>
+                      </div>
+                      <div className="w-full bg-purple-900 rounded-full h-2">
+                        <div 
+                          className="bg-red-500 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${selectedCharacter.traits.aggression}%` }}
+                        ></div>
+                      </div>
+                    </div>
 
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-purple-400 font-mono text-sm">CHARISMA</span>
-                    <span className="text-purple-300 font-mono text-sm">{selectedCharacter.charisma}/10</span>
-                  </div>
-                  <div className="w-full bg-purple-900 rounded-full h-2">
-                    <div 
-                      className="bg-purple-500 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${(selectedCharacter.charisma / 10) * 100}%` }}
-                    ></div>
-                  </div>
-                </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-purple-400 font-mono text-sm">LOYALTY</span>
+                        <span className="text-purple-300 font-mono text-sm">{selectedCharacter.traits.loyalty}/100</span>
+                      </div>
+                      <div className="w-full bg-purple-900 rounded-full h-2">
+                        <div 
+                          className="bg-green-500 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${selectedCharacter.traits.loyalty}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-purple-400 font-mono text-sm">RESILIENCE</span>
+                        <span className="text-purple-300 font-mono text-sm">{selectedCharacter.traits.resilience}/100</span>
+                      </div>
+                      <div className="w-full bg-purple-900 rounded-full h-2">
+                        <div 
+                          className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${selectedCharacter.traits.resilience}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-purple-400 font-mono text-sm">CHARISMA</span>
+                        <span className="text-purple-300 font-mono text-sm">{selectedCharacter.traits.charisma}/100</span>
+                      </div>
+                      <div className="w-full bg-purple-900 rounded-full h-2">
+                        <div 
+                          className="bg-yellow-500 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${selectedCharacter.traits.charisma}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-purple-400 font-mono text-sm">SUSPICION</span>
+                        <span className="text-purple-300 font-mono text-sm">{selectedCharacter.traits.suspicion}/100</span>
+                      </div>
+                      <div className="w-full bg-purple-900 rounded-full h-2">
+                        <div 
+                          className="bg-orange-500 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${selectedCharacter.traits.suspicion}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-purple-400 font-mono text-sm">ENERGY</span>
+                        <span className="text-purple-300 font-mono text-sm">{selectedCharacter.traits.energy}/100</span>
+                      </div>
+                      <div className="w-full bg-purple-900 rounded-full h-2">
+                        <div 
+                          className="bg-cyan-500 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${selectedCharacter.traits.energy}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 p-2 bg-purple-900/30 border border-purple-500/30 rounded">
+                      <div className="text-center">
+                        <span className="text-purple-400 font-mono text-sm">RISK SCORE</span>
+                        <div className="text-purple-300 font-mono text-lg font-bold">
+                          {selectedCharacter.traits.riskScore > 0 ? '+' : ''}{selectedCharacter.traits.riskScore}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-purple-400 font-mono text-sm">STRENGTH</span>
+                        <span className="text-purple-300 font-mono text-sm">{selectedCharacter.strength}/10</span>
+                      </div>
+                      <div className="w-full bg-purple-900 rounded-full h-2">
+                        <div 
+                          className="bg-purple-500 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${(selectedCharacter.strength / 10) * 100}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-purple-400 font-mono text-sm">INTELLIGENCE</span>
+                        <span className="text-purple-300 font-mono text-sm">{selectedCharacter.intelligence}/10</span>
+                      </div>
+                      <div className="w-full bg-purple-900 rounded-full h-2">
+                        <div 
+                          className="bg-purple-500 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${(selectedCharacter.intelligence / 10) * 100}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-purple-400 font-mono text-sm">CHARISMA</span>
+                        <span className="text-purple-300 font-mono text-sm">{selectedCharacter.charisma}/10</span>
+                      </div>
+                      <div className="w-full bg-purple-900 rounded-full h-2">
+                        <div 
+                          className="bg-purple-500 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${(selectedCharacter.charisma / 10) * 100}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Description */}

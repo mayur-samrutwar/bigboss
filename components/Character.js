@@ -35,19 +35,47 @@ const Character = ({ roomWidth, roomHeight, imageWidth, imageHeight, onCharacter
   const [direction, setDirection] = useState(directions[Math.floor(Math.random() * directions.length)]);
   const [animationFrame, setAnimationFrame] = useState(0);
   const [isMoving, setIsMoving] = useState(true);
+  const [agentTraits, setAgentTraits] = useState(null);
+  const [loadingTraits, setLoadingTraits] = useState(false);
 
-  // Character data
+  // Fetch real agent traits when participant is available
+  useEffect(() => {
+    if (participant && participant.agentId) {
+      setLoadingTraits(true);
+      fetch(`/api/traits/getAgentTraits?agentId=${participant.agentId}`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            setAgentTraits(data.traits);
+          } else {
+            console.error('Failed to fetch agent traits:', data.error);
+            setAgentTraits(null);
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching agent traits:', error);
+          setAgentTraits(null);
+        })
+        .finally(() => {
+          setLoadingTraits(false);
+        });
+    }
+  }, [participant]);
+
+  // Character data with real traits when available
   const characterData = {
     id: characterId,
-    name: participant ? `Agent #${participant.agentId}` : `Contestant ${String.fromCharCode(64 + characterId)}`,
+    name: participant ? (participant.name || `Agent #${participant.agentId}`) : `Contestant ${String.fromCharCode(64 + characterId)}`,
     personality: ['Bold', 'Strategic', 'Dramatic', 'Funny', 'Mysterious', 'Energetic', 'Calm', 'Aggressive', 'Charming', 'Intelligent', 'Wild'][characterId - 1] || 'Unique',
-    strength: participant ? Math.floor(Math.random() * 10) + 1 : Math.floor(Math.random() * 10) + 1,
-    intelligence: participant ? Math.floor(Math.random() * 10) + 1 : Math.floor(Math.random() * 10) + 1,
-    charisma: participant ? Math.floor(Math.random() * 10) + 1 : Math.floor(Math.random() * 10) + 1,
+    strength: agentTraits ? Math.floor(agentTraits.popularity / 10) : (participant ? Math.floor(Math.random() * 10) + 1 : Math.floor(Math.random() * 10) + 1),
+    intelligence: agentTraits ? Math.floor(agentTraits.charisma / 10) : (participant ? Math.floor(Math.random() * 10) + 1 : Math.floor(Math.random() * 10) + 1),
+    charisma: agentTraits ? Math.floor(agentTraits.charisma / 10) : (participant ? Math.floor(Math.random() * 10) + 1 : Math.floor(Math.random() * 10) + 1),
     description: participant ? 
       `Agent #${participant.agentId} - A ${['bold', 'strategic', 'dramatic', 'funny', 'mysterious', 'energetic', 'calm', 'aggressive', 'charming', 'intelligent', 'wild'][characterId - 1] || 'unique'} contestant with great potential to win Big Boss 17.` :
       `A ${['bold', 'strategic', 'dramatic', 'funny', 'mysterious', 'energetic', 'calm', 'aggressive', 'charming', 'intelligent', 'wild'][characterId - 1] || 'unique'} contestant with great potential to win Big Boss 17.`,
-    participant: participant
+    participant: participant,
+    traits: agentTraits,
+    loadingTraits: loadingTraits
   };
 
   useEffect(() => {

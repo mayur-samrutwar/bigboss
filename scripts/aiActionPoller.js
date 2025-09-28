@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // AI Action Polling Script
-// This script calls the comprehensive polling API every 3 minutes
+// This script calls the comprehensive polling API every 2 minutes
 
 const http = require('http');
 
@@ -91,7 +91,7 @@ function makeRequest(method, path, data) {
 // Run the polling immediately
 pollAiActions();
 
-// Set up interval to run every 3 minutes (180000ms)
-setInterval(pollAiActions, 180000);
+// Set up interval to run every 2 minutes (120000ms)
+setInterval(pollAiActions, 120000);
 
-console.log('🚀 AI Action polling started - polling every 3 minutes');
+console.log('🚀 AI Action polling started - polling every 2 minutes');

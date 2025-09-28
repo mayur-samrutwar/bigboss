@@ -120,8 +120,9 @@ Example: argue(1,3) or perform_task(2) or random_event(4)`
     const aiData = await aiResponse.json();
     const aiDecision = aiData.response.trim();
 
-    // Parse AI decision
-    const actionMatch = aiDecision.match(/^(\w+)\(([^)]+)\)$/);
+    // Parse AI decision - extract action from the end of the response
+    // Look for the pattern action_name(params) at the end of the response
+    const actionMatch = aiDecision.match(/(\w+)\(([^)]+)\)\s*$/);
     if (!actionMatch) {
       return res.status(400).json({
         success: false,

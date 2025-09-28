@@ -5,6 +5,7 @@ import WinnerPopup from '../components/WinnerPopup';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { parseEther } from 'viem';
 import { SHOW_CONTRACT_ABI, SHOW_CONTRACT_ADDRESS, PREDICTION_MARKET_ABI, PREDICTION_MARKET_ADDRESS } from '../lib/contract';
 
 export default function App() {
@@ -123,14 +124,14 @@ export default function App() {
 
     try {
       setError('');
-      // Prediction fee is 0.01 ETH per contract
-      const predictionFee = (0.01 * contracts).toString();
+      // Prediction fee is 0.01 ETH per contract - convert to wei
+      const predictionFee = parseEther((0.01 * contracts).toString());
       
       writeContract({
         address: PREDICTION_MARKET_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
         functionName: 'placePrediction',
-        args: [nextShowId, BigInt(selectedWinner), BigInt(contracts)],
+        args: [BigInt(nextShowId), BigInt(selectedWinner), BigInt(contracts)],
         value: predictionFee,
       });
     } catch (err) {
@@ -156,14 +157,14 @@ export default function App() {
 
     try {
       setError('');
-      // Vote fee is 0.01 ETH
-      const voteFee = '0.01';
+      // Vote fee is 0.01 ETH - convert to wei
+      const voteFee = parseEther('0.01');
       
       writeContract({
         address: SHOW_CONTRACT_ADDRESS,
         abi: SHOW_CONTRACT_ABI,
         functionName: 'voteForAgent',
-        args: [currentShowId, BigInt(selectedVote)],
+        args: [BigInt(currentShowId), BigInt(selectedVote)],
         value: voteFee,
       });
     } catch (err) {

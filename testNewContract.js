@@ -8,7 +8,7 @@ async function testAgentCreation() {
 
     // Set up provider
     const provider = new ethers.JsonRpcProvider('https://testnet.evm.nodes.onflow.org');
-    const contractAddress = '0x5B3E85350c58F46690d016803a7a083594E7c182';
+    const contractAddress = '0x759aB3Ba417Da08eA211fC0312902786D889Bc25';
     const contract = new ethers.Contract(contractAddress, SHOW_CONTRACT_ABI, provider);
 
     console.log('1. Contract connection test...');

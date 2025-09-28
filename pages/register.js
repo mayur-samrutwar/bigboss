@@ -227,23 +227,6 @@ export default function Register() {
                   />
                 </div>
 
-                {/* Info about random traits */}
-                <div className="bg-blue-900/20 border border-blue-500 rounded-lg p-4">
-                  <h4 className="text-blue-400 font-mono text-sm mb-2">RANDOM TRAITS</h4>
-                  <p className="text-blue-300 font-mono text-xs">
-                    Your agent will receive randomly generated traits using Flow&apos;s secure VRF:
-                  </p>
-                  <ul className="text-blue-300 font-mono text-xs mt-2 space-y-1">
-                    <li>• Popularity: 30-80</li>
-                    <li>• Aggression: 20-70</li>
-                    <li>• Loyalty: 40-90</li>
-                    <li>• Resilience: 30-85</li>
-                    <li>• Charisma: 25-90</li>
-                    <li>• Suspicion: 10-60</li>
-                    <li>• Energy: 60-100</li>
-                  </ul>
-                </div>
-
                 {/* Register Button */}
                 <button
                   onClick={registerAgent}

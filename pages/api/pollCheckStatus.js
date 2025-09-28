@@ -122,10 +122,10 @@ export default async function handler(req, res) {
     }
 
     // Auto-end show if time has passed and autoProcess is true
-    if (autoProcess && timeHasPassed && isActive) {
+    if (autoProcess && timeHasPassed && isActive && winnerAgentId !== null) {
       try {
         console.log(`⏰ Auto-ending show ${showId} - time has passed`);
-        const tx = await contract.checkStatus(BigInt(showId));
+        const tx = await contract.endShow(BigInt(winnerAgentId));
         const receipt = await tx.wait();
         
         autoEndResult = {
@@ -174,11 +174,11 @@ export default async function handler(req, res) {
     };
 
     // Process the show if conditions are met
-    if (shouldProcess && status === 'READY_TO_END') {
+    if (shouldProcess && status === 'READY_TO_END' && winnerAgentId !== null) {
       try {
         console.log(`Processing show ${showId} - ending with winner ${winnerAgentId}`);
         
-        const tx = await contract.checkStatus(BigInt(showId));
+        const tx = await contract.endShow(BigInt(winnerAgentId));
         const receipt = await tx.wait();
 
         result.processed = true;

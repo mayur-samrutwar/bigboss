@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 
 // Contract configuration
-const SHOW_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '0x759aB3Ba417Da08eA211fC0312902786D889Bc25';
+const SHOW_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '0x3c221D1839897458e528C7EBFF7d62777Be14208';
 
 // Basic ABI for checkStatus function
 const BASIC_ABI = [

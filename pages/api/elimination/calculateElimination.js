@@ -96,6 +96,45 @@ export default async function handler(req, res) {
 
     console.log(`Processing ${agentsData.length} alive agents for elimination`);
 
+    // Check if there's only 1 agent left - they are the winner!
+    if (agentsData.length === 1) {
+      const winner = agentsData[0];
+      console.log(`🎉 WINNER FOUND! Agent ${winner.agentId} (${winner.name}) is the last agent standing!`);
+      
+      // End the show with this agent as the winner
+      try {
+        const endShowTx = await contract.endShow(BigInt(winner.agentId));
+        const endShowReceipt = await endShowTx.wait();
+        
+        console.log(`Show ended with winner: ${winner.name} (ID: ${winner.agentId})`);
+        console.log(`End show transaction: ${endShowTx.hash}`);
+        
+        return res.status(200).json({
+          success: true,
+          message: `🎉 SHOW ENDED! Agent ${winner.agentId} (${winner.name}) is the winner!`,
+          winner: {
+            agentId: winner.agentId,
+            name: winner.name,
+            traits: winner.traits,
+            riskScore: winner.riskScore
+          },
+          showEnded: true,
+          transaction: {
+            hash: endShowTx.hash,
+            blockNumber: endShowReceipt.blockNumber,
+            gasUsed: endShowReceipt.gasUsed.toString()
+          }
+        });
+      } catch (error) {
+        console.error('Error ending show:', error);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to end show with winner',
+          details: error.message
+        });
+      }
+    }
+
     // Sort agents by risk score (highest risk first)
     agentsData.sort((a, b) => b.riskScore - a.riskScore);
     

@@ -126,8 +126,8 @@ export default function App() {
       return;
     }
 
-    if (!nextShowId || !nextShowData?.isActive) {
-      setError('No next show available for predictions!');
+    if (!currentShowId || !showInfo?.isActive) {
+      setError('No active show available for predictions!');
       return;
     }
 
@@ -140,7 +140,7 @@ export default function App() {
         address: PREDICTION_MARKET_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
         functionName: 'placePrediction',
-        args: [BigInt(nextShowId), BigInt(selectedWinner), BigInt(contracts)],
+        args: [BigInt(currentShowId), BigInt(selectedWinner), BigInt(contracts)],
         value: predictionFee,
       });
     } catch (err) {
@@ -785,39 +785,12 @@ export default function App() {
               </div>
             )}
             {/* Status Polling Indicator */}
-            {statusPollingActive && (
-              <div className="flex justify-between items-center mt-2 pt-2 border-t border-green-500/30">
-                <span className="text-green-300 font-mono text-xs">Status Polling:</span>
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-green-400 font-mono text-xs">ACTIVE</span>
-                </div>
-              </div>
-            )}
-            {/* Elimination Polling Indicator */}
-            {eliminationPollingActive && (
-              <div className="flex justify-between items-center mt-1">
-                <span className="text-red-300 font-mono text-xs">Elimination Polling:</span>
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
-                  <span className="text-red-400 font-mono text-xs">ACTIVE</span>
-                </div>
-              </div>
-            )}
+            
+         
             {/* Show Status Details */}
             {showStatus && (
               <div className="mt-2 pt-2 border-t border-green-500/30">
-                <div className="flex justify-between">
-                  <span className="text-green-300 font-mono text-xs">Poll Status:</span>
-                  <span className={`font-mono text-xs ${
-                    showStatus.status === 'ACTIVE' ? 'text-green-400' :
-                    showStatus.status === 'READY_TO_END' ? 'text-yellow-400' :
-                    showStatus.status === 'ENDED' || showStatus.status === 'AUTO_ENDED' ? 'text-red-400' :
-                    'text-gray-400'
-                  }`}>
-                    {showStatus.status}
-                  </span>
-                </div>
+  
                 {showStatus.showInfo?.aliveCount !== undefined && (
                   <div className="flex justify-between">
                     <span className="text-green-300 font-mono text-xs">Alive:</span>
@@ -1020,7 +993,7 @@ export default function App() {
             {/* Buy Button */}
             <button
               onClick={handleBuy}
-              disabled={!selectedWinner || !isConnected || !showInfo?.isActive || !nextShowId || isPending || isConfirming}
+              disabled={!selectedWinner || !isConnected || !showInfo?.isActive || !currentShowId || isPending || isConfirming}
               className="w-full bg-green-500 hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold py-3 px-4 rounded-lg border-2 border-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/50"
               style={{
                 fontFamily: 'monospace',
@@ -1033,9 +1006,10 @@ export default function App() {
             {/* Prediction Info */}
             <div className="mt-2 text-xs text-green-300 font-mono text-center">
               {!isConnected && 'Connect wallet to predict'}
-              {isConnected && (!showInfo?.isActive || !nextShowId) && 'No next show available'}
-              {isConnected && showInfo?.isActive && nextShowId && participants.length === 0 && 'No participants yet'}
-              {isConnected && showInfo?.isActive && nextShowId && participants.length > 0 && !selectedWinner && 'Select an agent to predict'}
+              {isConnected && (!showInfo?.isActive || !currentShowId) && 'No active show available'}
+              {isConnected && showInfo?.isActive && currentShowId && participants.length === 0 && 'No participants yet'}
+              {isConnected && showInfo?.isActive && currentShowId && participants.length > 0 && !selectedWinner && 'Select an agent to predict'}
+              {isConnected && showInfo?.isActive && currentShowId && participants.length > 0 && selectedWinner && 'Ready to predict on current show!'}
             </div>
           </div>
         </div>

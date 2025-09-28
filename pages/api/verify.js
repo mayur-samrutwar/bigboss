@@ -1,64 +1,72 @@
+// pages/api/verify.js - Next.js Pages Router API endpoint
 import { SelfBackendVerifier, AllIds, DefaultConfigStore } from "@selfxyz/core";
 
-// Reuse a single verifier instance
+// Reuse a single verifier instance with playground configuration
 const selfBackendVerifier = new SelfBackendVerifier(
   "self-playground",
   "https://playground.self.xyz/api/verify",
-  false, // mockPassport: false = mainnet, true = staging/testnet
+  true, // mockPassport: false = mainnet, true = staging/testnet
   AllIds,
   new DefaultConfigStore({
     minimumAge: 18,
-    excludedCountries: ["IRN", "PRK", "RUS", "SYR"],
-    ofac: true,
+    excludedCountries: [], // Empty array to match playground circuit
+    ofac: false, // Disable OFAC to match playground circuit
   }),
-  "hex" // userIdentifierType
+  "uuid" // userIdentifierType
 );
 
 export default async function handler(req, res) {
-  // Enable CORS
+  // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+  // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
+  // Only allow POST requests
   if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
+    console.log("Verification request received:", {
+      method: req.method,
+      headers: req.headers,
+      body: req.body
+    });
+
     // Extract data from the request
     const { attestationId, proof, publicSignals, userContextData } = req.body;
 
-    console.log('Received verification request:', {
+    console.log("Extracted verification data:", {
       attestationId,
       hasProof: !!proof,
       hasPublicSignals: !!publicSignals,
-      hasUserContextData: !!userContextData,
-      userContextDataLength: userContextData?.length
+      hasUserContextData: !!userContextData
     });
 
     // Verify all required fields are present
     if (!proof || !publicSignals || !attestationId || !userContextData) {
-      console.log('Missing required fields:', {
+      console.error("Missing required fields:", {
         proof: !!proof,
         publicSignals: !!publicSignals,
         attestationId: !!attestationId,
         userContextData: !!userContextData
       });
       
-      return res.status(200).json({
-        message: "Proof, publicSignals, attestationId and userContextData are required",
+      return res.status(400).json({
         status: "error",
-        result: false,
+        message: "Proof, publicSignals, attestationId and userContextData are required",
         error_code: "MISSING_FIELDS"
       });
     }
 
+    console.log("Starting verification process...");
+
     // Verify the proof
-    console.log('Starting verification...');
     const result = await selfBackendVerifier.verify(
       attestationId,    // Document type (1 = passport, 2 = EU ID card, 3 = Aadhaar)
       proof,            // The zero-knowledge proof
@@ -66,52 +74,36 @@ export default async function handler(req, res) {
       userContextData   // User context data (hex string)
     );
 
-    console.log('Verification result:', {
-      isValid: result.isValidDetails.isValid,
-      hasDiscloseOutput: !!result.discloseOutput,
-      discloseOutputKeys: result.discloseOutput ? Object.keys(result.discloseOutput) : []
-    });
+    console.log("Verification result:", result);
 
     // Check if verification was successful
     if (result.isValidDetails.isValid) {
-      // Extract nullifier and other important data
-      const responseData = {
-        nullifier: result.discloseOutput?.nullifier || null,
-        credentialSubject: result.discloseOutput,
-        isValidDetails: result.isValidDetails,
-        timestamp: new Date().toISOString()
-      };
-
-      console.log('Verification successful, nullifier:', responseData.nullifier);
-
       // Verification successful - process the result
+      console.log("Verification successful!");
       return res.status(200).json({
         status: "success",
         result: true,
-        ...responseData
+        credentialSubject: result.discloseOutput,
       });
     } else {
       // Verification failed
-      console.log('Verification failed:', result.isValidDetails);
-      
+      console.log("Verification failed:", result.isValidDetails);
       return res.status(200).json({
         status: "error",
         result: false,
         reason: "Verification failed",
         error_code: "VERIFICATION_FAILED",
         details: result.isValidDetails,
-        timestamp: new Date().toISOString()
       });
     }
   } catch (error) {
-    console.error('Verification error:', error);
-    
-    return res.status(200).json({
+    console.error("Verification error:", error);
+    return res.status(500).json({
       status: "error",
       result: false,
       reason: error instanceof Error ? error.message : "Unknown error",
       error_code: "UNKNOWN_ERROR",
-      timestamp: new Date().toISOString()
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }

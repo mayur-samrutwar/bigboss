@@ -9,19 +9,23 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
 interface IShowContract {
     function getCurrentShow() external view returns (
         uint256 showId,
-        string memory name,
         uint256 startTime,
         uint256 endTime,
         bool isActive,
-        uint256 prizePool,
+        uint256 entryFee,
+        uint256 totalPrize,
         uint256 participantCount
     );
-    function getShowParticipants(uint256 _showId) external view returns (uint256[] memory);
+    function getShowParticipants(uint256 _showId) external view returns (uint256[] memory agentIds, address[] memory participantAddresses);
     function getAgentInfo(uint256 _agentId) external view returns (
+        uint256 agentId,
+        address owner,
         string memory name,
-        uint256[7] memory traits,
+        uint256[] memory parameters,
+        bool isActive,
         bool isAlive,
-        uint256 showId
+        uint256 createdAt,
+        uint256 lastUpdated
     );
     function getAgentVoteCount(uint256 _showId, uint256 _agentId) external view returns (uint256);
 }
@@ -71,8 +75,10 @@ contract PredictionMarket is ReentrancyGuard, Ownable, Pausable {
     
     // Modifiers
     modifier showActive(uint256 _showId) {
-        (,,,uint256 endTime, bool isActive,,) = showContract.getCurrentShow();
-        require(isActive && block.timestamp < endTime, "Show is not active");
+        (uint256 currentShowId, uint256 startTime, uint256 endTime, bool isActive,,,) = showContract.getCurrentShow();
+        require(isActive && _showId == currentShowId, "Can only predict on current show");
+        require(block.timestamp < endTime, "Show has ended");
+        require(block.timestamp <= startTime + 5 minutes, "Prediction window closed - only allowed within 5 minutes of show start");
         _;
     }
     
@@ -82,7 +88,7 @@ contract PredictionMarket is ReentrancyGuard, Ownable, Pausable {
     }
     
     modifier validAgent(uint256 _showId, uint256 _agentId) {
-        uint256[] memory participants = showContract.getShowParticipants(_showId);
+        (uint256[] memory participants,) = showContract.getShowParticipants(_showId);
         bool agentExists = false;
         for (uint256 i = 0; i < participants.length; i++) {
             if (participants[i] == _agentId) {
@@ -141,10 +147,11 @@ contract PredictionMarket is ReentrancyGuard, Ownable, Pausable {
         showPredictions[_showId].winnerId = _winnerId;
         
         // Calculate platform fee
-        uint256 platformFee = (showPredictions[_showId].totalPrize * FEE_PERCENTAGE) / 100;
+        uint256 totalPrize = showPredictions[_showId].totalPrize;
+        uint256 platformFee = (totalPrize * FEE_PERCENTAGE) / 100;
         totalFees += platformFee;
         
-        emit ShowEnded(_showId, _winnerId, showPredictions[_showId].totalPrize);
+        emit ShowEnded(_showId, _winnerId, totalPrize);
     }
     
     /**
@@ -160,7 +167,7 @@ contract PredictionMarket is ReentrancyGuard, Ownable, Pausable {
         uint256 totalContracts
     ) {
         winnerId = showPredictions[_showId].winnerId;
-        (winnerName,,,) = showContract.getAgentInfo(winnerId);
+        (, , winnerName, , , , , ) = showContract.getAgentInfo(winnerId);
         totalContracts = showPredictions[_showId].totalContractsPerAgent[winnerId];
     }
     
@@ -174,8 +181,9 @@ contract PredictionMarket is ReentrancyGuard, Ownable, Pausable {
         
         uint256 userContracts = showPredictions[_showId].userPredictions[msg.sender][showPredictions[_showId].winnerId].contracts;
         uint256 totalWinnerContracts = showPredictions[_showId].totalContractsPerAgent[showPredictions[_showId].winnerId];
-        uint256 platformFee = (showPredictions[_showId].totalPrize * FEE_PERCENTAGE) / 100;
-        uint256 netPrize = showPredictions[_showId].totalPrize - platformFee;
+        uint256 totalPrize = showPredictions[_showId].totalPrize;
+        uint256 platformFee = (totalPrize * FEE_PERCENTAGE) / 100;
+        uint256 netPrize = totalPrize - platformFee;
         
         // Calculate user's share of the prize
         uint256 userPrize = (netPrize * userContracts) / totalWinnerContracts;
@@ -218,7 +226,7 @@ contract PredictionMarket is ReentrancyGuard, Ownable, Pausable {
         string memory name,
         uint256 totalContracts
     ) {
-        (name,,,) = showContract.getAgentInfo(_agentId);
+        (, , name, , , , , ) = showContract.getAgentInfo(_agentId);
         totalContracts = showPredictions[_showId].totalContractsPerAgent[_agentId];
     }
     
@@ -237,11 +245,11 @@ contract PredictionMarket is ReentrancyGuard, Ownable, Pausable {
      */
     function getCurrentShowInfo() external view returns (
         uint256 showId,
-        string memory name,
         uint256 startTime,
         uint256 endTime,
         bool isActive,
-        uint256 prizePool,
+        uint256 entryFee,
+        uint256 totalPrize,
         uint256 participantCount
     ) {
         return showContract.getCurrentShow();
@@ -251,7 +259,7 @@ contract PredictionMarket is ReentrancyGuard, Ownable, Pausable {
      * @dev Get show participants from main contract
      * @param _showId ID of the show
      */
-    function getShowParticipants(uint256 _showId) external view returns (uint256[] memory) {
+    function getShowParticipants(uint256 _showId) external view returns (uint256[] memory agentIds, address[] memory participantAddresses) {
         return showContract.getShowParticipants(_showId);
     }
     

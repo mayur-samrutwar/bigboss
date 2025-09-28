@@ -7,7 +7,7 @@ async function main() {
   const PredictionMarket = await ethers.getContractFactory("PredictionMarket");
   
   // Get the ShowContract address from environment
-  const showContractAddress = process.env.SHOW_CONTRACT_ADDRESS || "0xA658D520B9EF89c7996bd6e73c232D0feAa076A4";
+  const showContractAddress = process.env.SHOW_CONTRACT_ADDRESS || "0x372702e648fd7FA0b7D09A3c5f8D6309B2aa157a";
   
   console.log(`📋 ShowContract address: ${showContractAddress}`);
   
@@ -30,7 +30,8 @@ async function main() {
   
   const currentShowInfo = await predictionMarket.getCurrentShowInfo();
   console.log(`📺 Current show ID: ${currentShowInfo.showId}`);
-  console.log(`📺 Current show name: ${currentShowInfo.name}`);
+  console.log(`📺 Current show start time: ${currentShowInfo.startTime}`);
+  console.log(`📺 Current show end time: ${currentShowInfo.endTime}`);
   console.log(`📺 Current show active: ${currentShowInfo.isActive}`);
   
   console.log("\n🎉 Deployment completed successfully!");

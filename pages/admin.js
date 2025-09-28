@@ -466,7 +466,7 @@ export default function Admin() {
               {/* Debug Info */}
               <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
                 <div>Debug: isAdmin={isAdmin ? 'true' : 'false'}</div>
-                <div>Debug: newShowDuration='{newShowDuration}'</div>
+                <div>Debug: newShowDuration={newShowDuration}</div>
                 <div>Debug: isPending={isPending ? 'true' : 'false'}</div>
                 <div>Debug: isConfirming={isConfirming ? 'true' : 'false'}</div>
                 <div>Debug: Button disabled={(!isAdmin || !newShowDuration || isPending || isConfirming) ? 'true' : 'false'}</div>

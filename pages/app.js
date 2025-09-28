@@ -48,6 +48,7 @@ export default function App() {
   const [winnerPopupOpen, setWinnerPopupOpen] = useState(false);
   const [currentEventData, setCurrentEventData] = useState(null);
   const [currentWinnerData, setCurrentWinnerData] = useState(null);
+  const [userInput, setUserInput] = useState('');
 
   // Contract read functions
   const { data: currentShowId } = useReadContract({
@@ -1312,6 +1313,23 @@ export default function App() {
                   </div>
                 </div>
               )}
+
+              {/* User Input Box */}
+              <div className="mb-4">
+                <h4 className="text-purple-400 font-mono text-sm mb-2">USER INPUT</h4>
+                <input
+                  type="text"
+                  value={userInput}
+                  onChange={(e) => setUserInput(e.target.value)}
+                  placeholder="Enter your message about this character..."
+                  className="w-full bg-black/90 border-2 border-purple-500 text-purple-400 font-mono px-3 py-2 rounded focus:border-purple-400 focus:outline-none placeholder-purple-500/50"
+                />
+                {isConnected && (
+                  <div className="mt-1 text-xs text-purple-300 font-mono text-center">
+                    From: {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Unknown'}
+                  </div>
+                )}
+              </div>
 
               {/* Action Buttons */}
               <div className="space-y-2">

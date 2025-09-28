@@ -40,6 +40,12 @@ export default function Admin() {
     args: nextShowId ? [nextShowId] : undefined,
   });
 
+  const { data: showDuration } = useReadContract({
+    address: SHOW_CONTRACT_ADDRESS,
+    abi: SHOW_CONTRACT_ABI,
+    functionName: 'SHOW_DURATION',
+  });
+
   // Contract write hooks
   const { writeContract, isPending, isConfirming, error, data: hash } = useWriteContract();
   const { isConfirmed } = useWaitForTransactionReceipt({
@@ -59,6 +65,7 @@ export default function Admin() {
   const [winnerAgentId, setWinnerAgentId] = useState('');
   const [killShowId, setKillShowId] = useState('');
   const [killAgentId, setKillAgentId] = useState('');
+  const [newShowDuration, setNewShowDuration] = useState('');
 
   // Check if user is admin
   const isAdmin = isConnected && address && contractOwner && address.toLowerCase() === contractOwner.toLowerCase();
@@ -123,6 +130,47 @@ export default function Admin() {
       });
     } catch (err) {
       console.error('Error ending show:', err);
+    }
+  };
+
+  const updateShowTiming = async () => {
+    console.log('updateShowTiming called with:', newShowDuration);
+    console.log('isAdmin:', isAdmin);
+    console.log('isConnected:', isConnected);
+    console.log('contractOwner:', contractOwner);
+    console.log('address:', address);
+    
+    if (!newShowDuration || newShowDuration === '') {
+      console.log('No duration provided');
+      return;
+    }
+    
+    const durationInSeconds = parseInt(newShowDuration);
+    console.log('Parsed duration:', durationInSeconds);
+    
+    if (isNaN(durationInSeconds) || durationInSeconds < 300 || durationInSeconds > 86400) {
+      alert('Please enter a valid duration between 5 minutes (300 seconds) and 24 hours (86400 seconds)');
+      return;
+    }
+    
+    try {
+      console.log('Calling writeContract with:', {
+        address: SHOW_CONTRACT_ADDRESS,
+        functionName: 'updateShowTiming',
+        args: [BigInt(durationInSeconds)]
+      });
+      
+      await writeContract({
+        address: SHOW_CONTRACT_ADDRESS,
+        abi: SHOW_CONTRACT_ABI,
+        functionName: 'updateShowTiming',
+        args: [BigInt(durationInSeconds)],
+      });
+      
+      console.log('writeContract call successful');
+    } catch (err) {
+      console.error('Error updating show timing:', err);
+      alert(`Error updating show timing: ${err.message}`);
     }
   };
 
@@ -377,6 +425,52 @@ export default function Admin() {
               >
                 Kill Agent
               </button>
+            </div>
+
+            {/* Update Show Timing */}
+            <div className="p-4 border border-gray-200 rounded">
+              <h3 className="font-semibold mb-2">Update Show Duration</h3>
+              <p className="text-sm text-gray-600 mb-4">Change the duration for future shows.</p>
+              
+              {/* Current Duration Display */}
+              <div className="mb-4 p-3 bg-gray-50 rounded">
+                <div className="text-sm text-gray-600 mb-1">Current Duration:</div>
+                <div className="font-semibold text-gray-800">
+                  {showDuration ? `${Math.floor(Number(showDuration) / 60)} minutes (${Number(showDuration)} seconds)` : 'Loading...'}
+                </div>
+              </div>
+              
+              <div className="mb-4">
+                <input
+                  type="number"
+                  placeholder="Duration in seconds (300-86400)"
+                  value={newShowDuration}
+                  onChange={(e) => setNewShowDuration(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded"
+                  min="300"
+                  max="86400"
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  Min: 5 minutes (300s) | Max: 24 hours (86400s)
+                </div>
+              </div>
+              
+              <button
+                onClick={updateShowTiming}
+                disabled={!isAdmin || !newShowDuration || isPending || isConfirming}
+                className="w-full bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded"
+              >
+                {isPending ? 'Updating...' : isConfirming ? 'Confirming...' : 'Update Duration'}
+              </button>
+              
+              {/* Debug Info */}
+              <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
+                <div>Debug: isAdmin={isAdmin ? 'true' : 'false'}</div>
+                <div>Debug: newShowDuration='{newShowDuration}'</div>
+                <div>Debug: isPending={isPending ? 'true' : 'false'}</div>
+                <div>Debug: isConfirming={isConfirming ? 'true' : 'false'}</div>
+                <div>Debug: Button disabled={(!isAdmin || !newShowDuration || isPending || isConfirming) ? 'true' : 'false'}</div>
+              </div>
             </div>
           </div>
         </div>

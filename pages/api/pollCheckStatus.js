@@ -79,7 +79,8 @@ export default async function handler(req, res) {
         for (const participant of participants) {
           try {
             const agentInfo = await contract.getAgentInfo(BigInt(participant.agentId));
-            const [, , , , , , isAlive] = agentInfo;
+            // ABI returns: [agentId, owner, name, parameters, isActive, isAlive, createdAt, lastUpdated]
+            const [agentId_, owner, name, parameters, isActive, isAlive, createdAt, lastUpdated] = agentInfo;
             
             if (isAlive) {
               aliveCount++;

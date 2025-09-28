@@ -35,7 +35,9 @@ export default async function handler(req, res) {
     
     // Get show participants
     const showParticipants = await contract.getShowParticipants(BigInt(showId));
-    const agentIds = showParticipants.agentIds;
+    const [agentIds, participantAddresses] = showParticipants;
+    
+    console.log(`Found ${agentIds.length} participants in show ${showId}:`, agentIds.map(id => id.toString()));
     
     if (agentIds.length === 0) {
       return res.status(400).json({
@@ -47,43 +49,66 @@ export default async function handler(req, res) {
     // Get traits for all participating agents
     const agentsData = [];
     for (const agentId of agentIds) {
-      const agentInfo = await contract.getAgentInfo(agentId);
-      
-      if (!agentInfo.isAlive) continue; // Skip dead agents
-      
-      const traits = {
-        popularity: agentInfo.parameters[0] || 50,
-        aggression: agentInfo.parameters[1] || 30,
-        loyalty: agentInfo.parameters[2] || 60,
-        resilience: agentInfo.parameters[3] || 50,
-        charisma: agentInfo.parameters[4] || 40,
-        suspicion: agentInfo.parameters[5] || 20,
-        energy: agentInfo.parameters[6] || 80
-      };
-      
-      // Calculate risk score: (Suspicion + Aggression) - (Popularity + Charisma + Resilience)
-      const riskScore = (traits.suspicion + traits.aggression) - (traits.popularity + traits.charisma + traits.resilience);
-      
-      agentsData.push({
-        agentId: agentId.toString(),
-        name: agentInfo.name,
-        traits: traits,
-        riskScore: riskScore
-      });
+      try {
+        const agentInfo = await contract.getAgentInfo(BigInt(agentId));
+        
+        // ABI returns: [agentId, owner, name, parameters, isActive, isAlive, createdAt, lastUpdated]
+        const [agentId_, owner, name, parameters, isActive, isAlive, createdAt, lastUpdated] = agentInfo;
+        
+        if (!isAlive) continue; // Skip dead agents
+        
+        // Convert BigInt parameters to numbers
+        const traitValues = {
+          popularity: Number(parameters[0]) || 50,
+          aggression: Number(parameters[1]) || 30,
+          loyalty: Number(parameters[2]) || 60,
+          resilience: Number(parameters[3]) || 50,
+          charisma: Number(parameters[4]) || 40,
+          suspicion: Number(parameters[5]) || 20,
+          energy: Number(parameters[6]) || 80
+        };
+        
+        // Calculate risk score: (Suspicion + Aggression) - (Popularity + Charisma + Resilience)
+        const riskScore = (traitValues.suspicion + traitValues.aggression) - (traitValues.popularity + traitValues.charisma + traitValues.resilience);
+        
+        agentsData.push({
+          agentId: agentId.toString(),
+          name: name,
+          traits: traitValues,
+          riskScore: riskScore
+        });
+        
+        console.log(`Agent ${agentId} (${name}) - Risk Score: ${riskScore}, Traits:`, traitValues);
+        
+      } catch (error) {
+        console.log(`Error getting agent info for ${agentId}:`, error.message);
+        continue; // Skip this agent if we can't get its info
+      }
     }
 
     if (agentsData.length === 0) {
+      console.log(`No alive agents found in show ${showId}`);
       return res.status(400).json({
         success: false,
         error: 'No alive agents in this show'
       });
     }
 
+    console.log(`Processing ${agentsData.length} alive agents for elimination`);
+
     // Sort agents by risk score (highest risk first)
     agentsData.sort((a, b) => b.riskScore - a.riskScore);
+    
+    console.log('Agent risk rankings:', agentsData.map(agent => 
+      `${agent.name} (ID: ${agent.agentId}) - Risk: ${agent.riskScore}`
+    ));
 
     // Determine elimination criteria
     const eliminationCandidates = agentsData.slice(0, Math.min(3, agentsData.length)); // Top 3 riskiest
+    
+    console.log('Elimination candidates:', eliminationCandidates.map(agent => 
+      `${agent.name} (Risk: ${agent.riskScore}, Popularity: ${agent.traits.popularity})`
+    ));
     
     // Among candidates, eliminate the one with lowest popularity (or highest risk if tied)
     const eliminatedAgent = eliminationCandidates.reduce((lowest, current) => {
@@ -94,6 +119,9 @@ export default async function handler(req, res) {
       }
       return lowest;
     });
+
+    console.log(`Eliminating agent: ${eliminatedAgent.name} (ID: ${eliminatedAgent.agentId})`);
+    console.log(`Reason: Risk Score ${eliminatedAgent.riskScore}, Popularity ${eliminatedAgent.traits.popularity}`);
 
     // Kill the agent
     const tx = await contract.killAgent(BigInt(showId), BigInt(eliminatedAgent.agentId));

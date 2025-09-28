@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 // Contract configuration (avoiding import issues)
 const SHOW_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '0x759aB3Ba417Da08eA211fC0312902786D889Bc25';
 
-// Basic ABI for getAgentInfo function
+// Basic ABI for getAgentInfo function - matching the actual deployed contract ABI
 const BASIC_ABI = [
   'function agentCounter() view returns (uint256)',
   'function getAgentInfo(uint256) view returns (uint256, address, string, uint256[], bool, bool, uint256, uint256)'
@@ -42,9 +42,11 @@ export default async function handler(req, res) {
     const agentInfo = await contract.getAgentInfo(BigInt(agentId));
     console.log('Agent info received:', agentInfo);
     
-    // Extract traits from parameters (agentInfo is a Result array)
-    const parameters = agentInfo[3]; // parameters is at index 3
-    const traits = {
+    // ABI returns: [agentId, owner, name, parameters, isActive, isAlive, createdAt, lastUpdated]
+    const [agentId_, owner, name, parameters, isActive, isAlive, createdAt, lastUpdated] = agentInfo;
+    
+    // Extract trait values from the parameters array
+    const traitValues = {
       popularity: Number(parameters[0]) || 50,
       aggression: Number(parameters[1]) || 30,
       loyalty: Number(parameters[2]) || 60,
@@ -55,17 +57,17 @@ export default async function handler(req, res) {
     };
     
     // Calculate risk score: (Suspicion + Aggression) - (Popularity + Charisma + Resilience)
-    const riskScore = (traits.suspicion + traits.aggression) - (traits.popularity + traits.charisma + traits.resilience);
+    const riskScore = (traitValues.suspicion + traitValues.aggression) - (traitValues.popularity + traitValues.charisma + traitValues.resilience);
 
     res.status(200).json({
       success: true,
       agentId: agentId,
-      agentName: agentInfo[2], // name is at index 2
-      isActive: Boolean(agentInfo[4]), // isActive is at index 4
-      isAlive: Boolean(agentInfo[5]), // isAlive is at index 5
-      traits: traits,
+      agentName: name,
+      isActive: Boolean(isActive),
+      isAlive: Boolean(isAlive),
+      traits: traitValues,
       riskScore: riskScore,
-      lastUpdated: Number(agentInfo[7]), // lastUpdated is at index 7
+      lastUpdated: Number(lastUpdated),
       isMockData: false,
       note: 'Real data from contract'
     });

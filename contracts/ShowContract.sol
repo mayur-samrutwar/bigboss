@@ -231,13 +231,13 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
         nextShowId = showCounter;
         
         shows[nextShowId].showId = nextShowId;
-        shows[nextShowId].startTime = block.timestamp;
-        shows[nextShowId].endTime = block.timestamp + SHOW_DURATION;
+        shows[nextShowId].startTime = 0; // Will be set when show actually begins
+        shows[nextShowId].endTime = 0; // Will be set when show actually begins
         shows[nextShowId].isActive = false; // Show is in preparation phase, not active yet
         shows[nextShowId].isEnded = false;
         shows[nextShowId].entryFee = 0.01 ether; // Default entry fee
         
-        emit ShowStarted(nextShowId, shows[nextShowId].startTime, shows[nextShowId].endTime, shows[nextShowId].entryFee);
+        emit ShowStarted(nextShowId, 0, 0, shows[nextShowId].entryFee);
     }
     
     /**
@@ -251,7 +251,9 @@ contract ShowContract is ReentrancyGuard, Ownable, Pausable {
         currentShowId = nextShowId;
         nextShowId = 0; // Clear next show since it's now current
         
-        // Set the show as active when it begins
+        // Set the actual start and end times when the show begins
+        shows[currentShowId].startTime = block.timestamp;
+        shows[currentShowId].endTime = block.timestamp + SHOW_DURATION;
         shows[currentShowId].isActive = true;
         
         emit ShowStarted(currentShowId, shows[currentShowId].startTime, shows[currentShowId].endTime, shows[currentShowId].entryFee);

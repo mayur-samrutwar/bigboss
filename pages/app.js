@@ -34,6 +34,15 @@ export default function App() {
   const [agentNews, setAgentNews] = useState([]);
   const [lastPollTime, setLastPollTime] = useState(new Date().toISOString());
   
+  // Status polling states
+  const [showStatus, setShowStatus] = useState(null);
+  const [statusPollingActive, setStatusPollingActive] = useState(false);
+  const [lastStatusPollTime, setLastStatusPollTime] = useState(new Date().toISOString());
+  
+  // Elimination polling states
+  const [eliminationPollingActive, setEliminationPollingActive] = useState(false);
+  const [lastEliminationPollTime, setLastEliminationPollTime] = useState(new Date().toISOString());
+  
   // Popup states
   const [eventPopupOpen, setEventPopupOpen] = useState(false);
   const [winnerPopupOpen, setWinnerPopupOpen] = useState(false);
@@ -365,6 +374,122 @@ export default function App() {
     }
   };
 
+  // Function to poll show status
+  const pollShowStatus = async () => {
+    if (!currentShowId) return;
+    
+    try {
+      const response = await fetch('/api/pollCheckStatus', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          showId: currentShowId.toString(),
+          autoProcess: true
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log(`📊 Status poll result:`, {
+          status: data.status,
+          reason: data.reason,
+          aliveCount: data.showInfo?.aliveCount,
+          winnerAgentId: data.showInfo?.winnerAgentId
+        });
+        
+        // Update show status
+        setShowStatus(data);
+        setLastStatusPollTime(new Date().toISOString());
+        
+        // Handle status changes
+        if (data.status === 'AUTO_ENDED' || data.status === 'ENDED') {
+          setSuccess(`🏁 Show ${currentShowId} has ended! ${data.reason}`);
+        } else if (data.status === 'READY_TO_END') {
+          setSuccess(`🎯 Show ready to end! ${data.reason}`);
+        } else if (data.status === 'NO_WINNER') {
+          setSuccess(`⚠️ No winner found! ${data.reason}`);
+        }
+        
+        // Show winner popup if show was processed
+        if (data.processed && data.showInfo?.winnerAgentId) {
+          setCurrentWinnerData({
+            winnerAgentId: data.showInfo.winnerAgentId,
+            showId: currentShowId,
+            transactionHash: data.transaction?.hash
+          });
+          setWinnerPopupOpen(true);
+        }
+        
+      } else {
+        console.error('Status polling failed:', data.error);
+      }
+    } catch (error) {
+      console.error('Error polling show status:', error);
+    }
+  };
+
+  // Function to poll for eliminations
+  const pollElimination = async () => {
+    if (!currentShowId) return;
+    
+    try {
+      const response = await fetch('/api/elimination/calculateElimination', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          showId: currentShowId.toString()
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log(`💀 Elimination poll result:`, {
+          eliminatedAgent: data.eliminatedAgent?.name,
+          eliminationReason: data.eliminationReason,
+          remainingAgents: data.remainingAgents?.length
+        });
+        
+        // Update elimination polling time
+        setLastEliminationPollTime(new Date().toISOString());
+        
+        // Show elimination notification
+        setEliminationNotification({
+          eliminatedAgent: data.eliminatedAgent,
+          eliminationReason: data.eliminationReason,
+          remainingAgents: data.remainingAgents,
+          riskRankings: data.riskRankings
+        });
+
+        // Add to elimination history
+        setEliminationHistory(prev => [{
+          id: Date.now(),
+          timestamp: new Date().toISOString(),
+          eliminatedAgent: data.eliminatedAgent,
+          eliminationReason: data.eliminationReason,
+          remainingCount: data.remainingAgents?.length || 0
+        }, ...prev]);
+
+        setSuccess(`💀 Elimination: ${data.eliminatedAgent?.name} has been eliminated! ${data.eliminationReason}`);
+        
+        // Refresh participants data after elimination
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+        
+      } else {
+        console.log(`No elimination needed: ${data.error || 'No agents to eliminate'}`);
+      }
+    } catch (error) {
+      console.error('Error polling elimination:', error);
+    }
+  };
+
   // Update show info when contract data changes
   useEffect(() => {
     if (currentShowData) {
@@ -450,6 +575,48 @@ export default function App() {
 
     return () => clearInterval(pollInterval);
   }, [currentShowId, showInfo?.isActive, lastPollTime]);
+
+  // Poll show status every 30 seconds when show is active
+  useEffect(() => {
+    if (!currentShowId || !showInfo?.isActive) {
+      setStatusPollingActive(false);
+      return;
+    }
+
+    setStatusPollingActive(true);
+    console.log(`🔄 Starting status polling for show ${currentShowId} every 30 seconds`);
+
+    const statusPollInterval = setInterval(() => {
+      pollShowStatus();
+    }, 30000); // Poll every 30 seconds
+
+    return () => {
+      clearInterval(statusPollInterval);
+      setStatusPollingActive(false);
+      console.log(`⏹️ Stopped status polling for show ${currentShowId}`);
+    };
+  }, [currentShowId, showInfo?.isActive]);
+
+  // Poll for eliminations every 60 seconds when show is active
+  useEffect(() => {
+    if (!currentShowId || !showInfo?.isActive) {
+      setEliminationPollingActive(false);
+      return;
+    }
+
+    setEliminationPollingActive(true);
+    console.log(`💀 Starting elimination polling for show ${currentShowId} every 60 seconds`);
+
+    const eliminationPollInterval = setInterval(() => {
+      pollElimination();
+    }, 60000); // Poll every 60 seconds (1 minute)
+
+    return () => {
+      clearInterval(eliminationPollInterval);
+      setEliminationPollingActive(false);
+      console.log(`⏹️ Stopped elimination polling for show ${currentShowId}`);
+    };
+  }, [currentShowId, showInfo?.isActive]);
 
   // Handle transaction success
   useEffect(() => {
@@ -615,6 +782,54 @@ export default function App() {
                 <span className="text-green-400 font-mono">
                   {Math.max(0, Math.floor((showInfo.endTime - Date.now()) / 60000))}m
                 </span>
+              </div>
+            )}
+            {/* Status Polling Indicator */}
+            {statusPollingActive && (
+              <div className="flex justify-between items-center mt-2 pt-2 border-t border-green-500/30">
+                <span className="text-green-300 font-mono text-xs">Status Polling:</span>
+                <div className="flex items-center space-x-1">
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-green-400 font-mono text-xs">ACTIVE</span>
+                </div>
+              </div>
+            )}
+            {/* Elimination Polling Indicator */}
+            {eliminationPollingActive && (
+              <div className="flex justify-between items-center mt-1">
+                <span className="text-red-300 font-mono text-xs">Elimination Polling:</span>
+                <div className="flex items-center space-x-1">
+                  <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
+                  <span className="text-red-400 font-mono text-xs">ACTIVE</span>
+                </div>
+              </div>
+            )}
+            {/* Show Status Details */}
+            {showStatus && (
+              <div className="mt-2 pt-2 border-t border-green-500/30">
+                <div className="flex justify-between">
+                  <span className="text-green-300 font-mono text-xs">Poll Status:</span>
+                  <span className={`font-mono text-xs ${
+                    showStatus.status === 'ACTIVE' ? 'text-green-400' :
+                    showStatus.status === 'READY_TO_END' ? 'text-yellow-400' :
+                    showStatus.status === 'ENDED' || showStatus.status === 'AUTO_ENDED' ? 'text-red-400' :
+                    'text-gray-400'
+                  }`}>
+                    {showStatus.status}
+                  </span>
+                </div>
+                {showStatus.showInfo?.aliveCount !== undefined && (
+                  <div className="flex justify-between">
+                    <span className="text-green-300 font-mono text-xs">Alive:</span>
+                    <span className="text-green-400 font-mono text-xs">{showStatus.showInfo.aliveCount}</span>
+                  </div>
+                )}
+                {showStatus.showInfo?.winnerAgentId && (
+                  <div className="flex justify-between">
+                    <span className="text-green-300 font-mono text-xs">Winner:</span>
+                    <span className="text-green-400 font-mono text-xs">Agent {showStatus.showInfo.winnerAgentId}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
